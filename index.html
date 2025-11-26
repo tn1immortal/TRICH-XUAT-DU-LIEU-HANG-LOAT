@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Data Extractor Pro v4.3 (OCR Enabled)</title>
+    <title>Super Data Extractor Pro v4.5 (PDF Support)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -136,7 +136,7 @@
         };
 
         // --- EXPORT LOGIC ---
-        const exportData = (data, options) => {
+        const exportData = async (data, options, setExportStatus) => {
             const { format, selectedCategories } = options;
             const rowsToExport = data.results.filter(r => selectedCategories.includes(r.categoryId));
             
@@ -160,7 +160,70 @@
                 XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
                 XLSX.writeFile(workbook, `${fileName}.xlsx`);
             }
-            else if (format === 'word' || format === 'html') {
+            else if (format === 'pdf') {
+                if (setExportStatus) setExportStatus("Đang tải font tiếng Việt...");
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+
+                // Dynamic Font Loading for Vietnamese Support
+                try {
+                    // Using Roboto Regular from a reliable CDN
+                    const fontUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf";
+                    const response = await fetch(fontUrl);
+                    const buffer = await response.arrayBuffer();
+                    
+                    const blob = new Blob([buffer]);
+                    const reader = new FileReader();
+                    reader.readAsDataURL(blob);
+                    
+                    await new Promise(resolve => {
+                        reader.onloadend = () => {
+                            const base64data = reader.result.split(',')[1];
+                            doc.addFileToVFS("Roboto-Regular.ttf", base64data);
+                            doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
+                            doc.setFont("Roboto");
+                            resolve();
+                        };
+                    });
+                } catch (e) {
+                    console.warn("Lỗi tải font, PDF có thể bị lỗi ký tự:", e);
+                    alert("Không thể tải font tiếng Việt. File PDF có thể bị lỗi hiển thị ký tự.");
+                }
+
+                if (setExportStatus) setExportStatus("Đang tạo PDF...");
+
+                // Prepare Table Data
+                const tableBody = rowsToExport.map(r => [
+                    r.categoryName,
+                    `${r.fileName} (Trang ${r.pageIndex})`,
+                    r.keyword,
+                    r.context.replace(/<[^>]*>?/gm, ' ').replace(/\n/g, ' ').substring(0, 500) // Limit context length
+                ]);
+
+                doc.autoTable({
+                    head: [['Mục', 'File/Trang', 'Từ khóa', 'Nội dung']],
+                    body: tableBody,
+                    styles: { font: 'Roboto', fontSize: 10, cellPadding: 2 },
+                    columnStyles: {
+                        0: { cellWidth: 25 }, // Muc
+                        1: { cellWidth: 35 }, // File
+                        2: { cellWidth: 25 }, // Keyword
+                        3: { cellWidth: 'auto' } // Content
+                    },
+                    headStyles: { fillColor: [37, 99, 235] }, // Blue header
+                    margin: { top: 20 },
+                    didDrawPage: (data) => {
+                        doc.text("Báo cáo trích xuất dữ liệu", 14, 15);
+                        doc.setFontSize(8);
+                        doc.text(`Ngày xuất: ${new Date().toLocaleString()}`, 14, doc.internal.pageSize.height - 10);
+                    }
+                });
+
+                doc.save(`${fileName}.pdf`);
+                if (setExportStatus) setExportStatus(null);
+            }
+            // Logic for Word, HTML, and MHTML
+            else if (format === 'word' || format === 'html' || format === 'mhtml') {
                 let htmlContent = `
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
                     <head><meta charset='utf-8'><title>Export</title>
@@ -181,10 +244,25 @@
                     });
                 });
                 htmlContent += `</tbody></table></body></html>`;
-                const blob = new Blob([htmlContent], { type: format === 'word' ? 'application/msword' : 'text/html' });
+                
+                let fileContent = htmlContent;
+                let mimeType = 'text/html';
+                let extension = 'html';
+
+                if (format === 'word') {
+                    mimeType = 'application/msword';
+                    extension = 'doc';
+                } else if (format === 'mhtml') {
+                    mimeType = 'multipart/related';
+                    extension = 'mht';
+                    const boundary = "----=_NextPart_000_0000_01D00000.00000000";
+                    fileContent = `MIME-Version: 1.0\nContent-Type: multipart/related; boundary="${boundary}"; type="text/html"\n\n--${boundary}\nContent-Type: text/html; charset="utf-8"\nContent-Transfer-Encoding: 8bit\n\n${htmlContent}\n\n--${boundary}--`;
+                }
+
+                const blob = new Blob([fileContent], { type: mimeType });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `${fileName}.${format === 'word' ? 'doc' : 'html'}`;
+                link.download = `${fileName}.${extension}`;
                 link.click();
             }
         };
@@ -192,22 +270,51 @@
         // --- COMPONENTS ---
 
         const ExportModal = ({ isOpen, onClose, categories, data, onExport }) => {
-            if (!isOpen) return null;
             const [selectedCats, setSelectedCats] = useState(categories.map(c => c.id));
             const [format, setFormat] = useState('excel');
+            const [status, setStatus] = useState(null);
+
+            // Sync selected categories when modal opens/categories change
+            useEffect(() => {
+                if (isOpen) setSelectedCats(categories.map(c => c.id));
+            }, [isOpen, categories]);
+
+            if (!isOpen) return null;
+
             const toggleCat = (id) => selectedCats.includes(id) ? setSelectedCats(selectedCats.filter(c => c !== id)) : setSelectedCats([...selectedCats, id]);
             const toggleAll = () => setSelectedCats(selectedCats.length === categories.length ? [] : categories.map(c => c.id));
 
+            const handleExportClick = async () => {
+                await onExport(format, selectedCats, setStatus);
+                if (format !== 'pdf') onClose(); // Close immediately for sync exports
+                else {
+                    // For PDF, we might want to wait or close after a delay, 
+                    // but the status update will handle UI feedback.
+                    // Let's close after a short delay if success
+                    setTimeout(onClose, 1000); 
+                }
+            };
+
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-                    <div className="bg-white rounded-lg p-6 w-96 shadow-xl">
+                    <div className="bg-white rounded-lg p-6 w-96 shadow-xl relative">
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="download" /> Xuất dữ liệu</h3>
+                        
+                        {status && (
+                            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-lg z-10 flex-col gap-2">
+                                <Icon name="loader-2" className="animate-spin text-blue-600" size={32} />
+                                <span className="text-sm font-medium text-blue-700">{status}</span>
+                            </div>
+                        )}
+
                         <div className="mb-4">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Định dạng:</label>
                             <select className="w-full border rounded p-2" value={format} onChange={e => setFormat(e.target.value)}>
                                 <option value="excel">Excel (.xlsx)</option>
+                                <option value="pdf">PDF (.pdf)</option>
                                 <option value="word">Word (.doc)</option>
-                                <option value="html">HTML / Web</option>
+                                <option value="html">HTML (.html)</option>
+                                <option value="mhtml">MHTML Archive (.mht)</option>
                             </select>
                         </div>
                         <div className="mb-4 max-h-48 overflow-y-auto border rounded p-2 custom-scroll">
@@ -220,7 +327,10 @@
                                 </label>
                             ))}
                         </div>
-                        <div className="flex justify-end gap-2"><button onClick={onClose} className="px-4 py-2 hover:bg-gray-100 rounded">Hủy</button><button onClick={() => onExport(format, selectedCats)} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled={selectedCats.length === 0}>Xuất File</button></div>
+                        <div className="flex justify-end gap-2">
+                            <button onClick={onClose} className="px-4 py-2 hover:bg-gray-100 rounded">Hủy</button>
+                            <button onClick={handleExportClick} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled={selectedCats.length === 0}>Xuất File</button>
+                        </div>
                     </div>
                 </div>
             );
@@ -472,7 +582,7 @@
 
             return (
                 <div className="h-full flex flex-col p-4 gap-4 overflow-hidden relative">
-                    <ExportModal isOpen={exportModalOpen} onClose={() => setExportModalOpen(false)} categories={data.categories} data={data} onExport={(fmt, cats) => { exportData(data, {format: fmt, selectedCategories: cats}); setExportModalOpen(false); }} />
+                    <ExportModal isOpen={exportModalOpen} onClose={() => setExportModalOpen(false)} categories={data.categories} data={data} onExport={(fmt, cats, setSts) => exportData(data, {format: fmt, selectedCategories: cats}, setSts)} />
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[40vh] min-h-[300px] shrink-0">
                         {/* Categories (3/12) */}
@@ -488,7 +598,7 @@
                         {/* Controls (4/12) */}
                         <div className="lg:col-span-4 h-full bg-white rounded-lg shadow-sm border p-4 flex flex-col gap-4">
                             
-                            {/* NEW: Settings Section */}
+                            {/* Settings Section */}
                             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
                                 <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2 text-sm">
                                     <Icon name="settings" size={16} /> Cấu hình Xử lý
