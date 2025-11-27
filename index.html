@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Data Extractor Pro v4.5 (PDF Support)</title>
+    <title>Super Data Extractor Pro v4.17 (Smart Defaults)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -42,9 +42,8 @@
         .custom-scroll::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
         .custom-scroll::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
         
-        /* Toggle Switch */
-        .toggle-checkbox:checked { right: 0; border-color: #2563EB; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #2563EB; }
+        .editable-cell:hover { background-color: #fff; box-shadow: inset 0 0 0 1px #3b82f6; cursor: text; }
+        .editing textarea { width: 100%; height: 100%; min-height: 60px; outline: none; border: 2px solid #3b82f6; border-radius: 4px; padding: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical; }
     </style>
 </head>
 <body>
@@ -53,7 +52,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-        // --- ICONS ---
+        // --- UTILS ---
         const Icon = ({ name, size = 16, className = "" }) => {
             const ref = useRef(null);
             useEffect(() => {
@@ -73,13 +72,98 @@
 
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
+        const removeVietnameseTones = (str) => {
+            if (!str) return "";
+            str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g,"a"); 
+            str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g,"e"); 
+            str = str.replace(/ì|í|ị|ỉ|ĩ/g,"i"); 
+            str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g,"o"); 
+            str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g,"u"); 
+            str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g,"y"); 
+            str = str.replace(/đ/g,"d");
+            str = str.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, "A");
+            str = str.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, "E");
+            str = str.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, "I");
+            str = str.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, "O");
+            str = str.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, "U");
+            str = str.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, "Y");
+            str = str.replace(/Đ/g, "D");
+            return str.normalize('NFD').replace(/[\u0300-\u036f]/g, "");
+        }
+
+        const applyTextTransform = (text, mode) => {
+            if (!text) return "";
+            switch (mode) {
+                case 'uppercase': return text.toUpperCase();
+                case 'lowercase': return text.toLowerCase();
+                case 'sentence_case': 
+                    const lower = text.toLowerCase();
+                    return lower.replace(/(^\s*\w)/, c => c.toUpperCase());
+                case 'no_accent_upper':
+                    return removeVietnameseTones(text).toUpperCase();
+                case 'no_accent_upper_alpha':
+                    return removeVietnameseTones(text).toUpperCase().replace(/[^A-Z\s]/g, '');
+                default: return text;
+            }
+        }
+
+        const transformHtmlContent = (htmlContent, mode) => {
+            if (!htmlContent) return "";
+            if (mode === 'none') return htmlContent;
+            const parts = htmlContent.split(/(<[^>]+>)/g);
+            return parts.map(part => {
+                if (part.trim().startsWith('<')) {
+                    return part;
+                } else {
+                    return applyTextTransform(part, mode);
+                }
+            }).join('');
+        };
+
+        const parsePageRange = (rangeStr) => {
+            if (!rangeStr || typeof rangeStr !== 'string' || rangeStr.trim() === '') return null;
+            const pages = new Set();
+            const parts = rangeStr.split(',');
+            parts.forEach(part => {
+                const trimmed = part.trim();
+                if (trimmed.includes('-')) {
+                    const [start, end] = trimmed.split('-').map(Number);
+                    if (!isNaN(start) && !isNaN(end) && start <= end) {
+                        for (let i = start; i <= end; i++) pages.add(i);
+                    }
+                } else {
+                    const page = Number(trimmed);
+                    if (!isNaN(page)) pages.add(page);
+                }
+            });
+            return pages.size > 0 ? pages : null;
+        };
+
+        const copyToClipboard = (text) => {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-9999px";
+            textArea.style.top = "0";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                const successful = document.execCommand('copy');
+                if (!successful) console.error('Fallback: Copying text command was unsuccessful');
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            document.body.removeChild(textArea);
+        };
+
         // --- FILE PROCESSING ---
         const extractContentFromFile = async (file, useOCR) => {
             const fileType = file.name.split('.').pop().toLowerCase();
             let pages = []; 
 
             try {
-                if (['txt', 'html', 'htm', 'md', 'csv', 'xml', 'json'].includes(fileType)) {
+                if (['txt', 'html', 'htm', 'md', 'csv', 'xml', 'json', 'mhtml', 'mht', 'doc'].includes(fileType)) {
                     const text = await file.text();
                     pages.push({ pageIndex: 1, text: text });
                 }
@@ -112,7 +196,6 @@
                     if (!useOCR) {
                         pages.push({ pageIndex: 1, text: "[Ảnh: Hãy bật chế độ OCR trong cấu hình để đọc nội dung ảnh]" });
                     } else {
-                        // Tesseract v4 Logic
                         try {
                             const worker = await Tesseract.createWorker();
                             await worker.loadLanguage('vie');
@@ -126,7 +209,12 @@
                         }
                     }
                 } else {
-                    pages.push({ pageIndex: 0, text: `[Định dạng .${fileType} chưa hỗ trợ]` });
+                    try {
+                        const text = await file.text();
+                        pages.push({ pageIndex: 1, text: text.substring(0, 1000) + "\n...[File binary hoặc định dạng lạ]..." });
+                    } catch (e) {
+                         pages.push({ pageIndex: 0, text: `[Định dạng .${fileType} chưa hỗ trợ]` });
+                    }
                 }
                 return pages;
             } catch (error) {
@@ -138,7 +226,14 @@
         // --- EXPORT LOGIC ---
         const exportData = async (data, options, setExportStatus) => {
             const { format, selectedCategories } = options;
-            const rowsToExport = data.results.filter(r => selectedCategories.includes(r.categoryId));
+            const isFullExtract = data.results.some(r => r.categoryId === 'all_content');
+            
+            let rowsToExport;
+            if (isFullExtract) {
+                rowsToExport = data.results;
+            } else {
+                rowsToExport = data.results.filter(r => selectedCategories.includes(r.categoryId));
+            }
             
             if (rowsToExport.length === 0) {
                 alert("Không có dữ liệu nào khớp với các mục đã chọn.");
@@ -165,17 +260,13 @@
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
 
-                // Dynamic Font Loading for Vietnamese Support
                 try {
-                    // Using Roboto Regular from a reliable CDN
                     const fontUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf";
                     const response = await fetch(fontUrl);
                     const buffer = await response.arrayBuffer();
-                    
                     const blob = new Blob([buffer]);
                     const reader = new FileReader();
                     reader.readAsDataURL(blob);
-                    
                     await new Promise(resolve => {
                         reader.onloadend = () => {
                             const base64data = reader.result.split(',')[1];
@@ -186,31 +277,25 @@
                         };
                     });
                 } catch (e) {
-                    console.warn("Lỗi tải font, PDF có thể bị lỗi ký tự:", e);
-                    alert("Không thể tải font tiếng Việt. File PDF có thể bị lỗi hiển thị ký tự.");
+                    console.warn("Lỗi tải font:", e);
+                    alert("Không thể tải font tiếng Việt. File PDF có thể bị lỗi ký tự.");
                 }
 
                 if (setExportStatus) setExportStatus("Đang tạo PDF...");
 
-                // Prepare Table Data
                 const tableBody = rowsToExport.map(r => [
                     r.categoryName,
                     `${r.fileName} (Trang ${r.pageIndex})`,
                     r.keyword,
-                    r.context.replace(/<[^>]*>?/gm, ' ').replace(/\n/g, ' ').substring(0, 500) // Limit context length
+                    r.context.replace(/<[^>]*>?/gm, ' ').replace(/\n/g, ' ').substring(0, 1000)
                 ]);
 
                 doc.autoTable({
                     head: [['Mục', 'File/Trang', 'Từ khóa', 'Nội dung']],
                     body: tableBody,
-                    styles: { font: 'Roboto', fontSize: 10, cellPadding: 2 },
-                    columnStyles: {
-                        0: { cellWidth: 25 }, // Muc
-                        1: { cellWidth: 35 }, // File
-                        2: { cellWidth: 25 }, // Keyword
-                        3: { cellWidth: 'auto' } // Content
-                    },
-                    headStyles: { fillColor: [37, 99, 235] }, // Blue header
+                    styles: { font: 'Roboto', fontSize: 9, cellPadding: 2 },
+                    columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 30 }, 2: { cellWidth: 20 }, 3: { cellWidth: 'auto' } },
+                    headStyles: { fillColor: [37, 99, 235] },
                     margin: { top: 20 },
                     didDrawPage: (data) => {
                         doc.text("Báo cáo trích xuất dữ liệu", 14, 15);
@@ -222,8 +307,7 @@
                 doc.save(`${fileName}.pdf`);
                 if (setExportStatus) setExportStatus(null);
             }
-            // Logic for Word, HTML, and MHTML
-            else if (format === 'word' || format === 'html' || format === 'mhtml') {
+            else if (['word', 'html', 'mhtml'].includes(format)) {
                 let htmlContent = `
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
                     <head><meta charset='utf-8'><title>Export</title>
@@ -270,43 +354,40 @@
         // --- COMPONENTS ---
 
         const ExportModal = ({ isOpen, onClose, categories, data, onExport }) => {
-            const [selectedCats, setSelectedCats] = useState(categories.map(c => c.id));
+            const isFullExtract = data.results.some(r => r.categoryId === 'all_content');
+            const displayCategories = isFullExtract 
+                ? [{ id: 'all_content', name: 'Toàn bộ nội dung' }]
+                : categories;
+
+            const [selectedCats, setSelectedCats] = useState(displayCategories.map(c => c.id));
             const [format, setFormat] = useState('excel');
             const [status, setStatus] = useState(null);
 
-            // Sync selected categories when modal opens/categories change
             useEffect(() => {
-                if (isOpen) setSelectedCats(categories.map(c => c.id));
-            }, [isOpen, categories]);
+                if (isOpen) setSelectedCats(displayCategories.map(c => c.id));
+            }, [isOpen, categories, isFullExtract]);
 
             if (!isOpen) return null;
 
             const toggleCat = (id) => selectedCats.includes(id) ? setSelectedCats(selectedCats.filter(c => c !== id)) : setSelectedCats([...selectedCats, id]);
-            const toggleAll = () => setSelectedCats(selectedCats.length === categories.length ? [] : categories.map(c => c.id));
+            const toggleAll = () => setSelectedCats(selectedCats.length === displayCategories.length ? [] : displayCategories.map(c => c.id));
 
             const handleExportClick = async () => {
                 await onExport(format, selectedCats, setStatus);
-                if (format !== 'pdf') onClose(); // Close immediately for sync exports
-                else {
-                    // For PDF, we might want to wait or close after a delay, 
-                    // but the status update will handle UI feedback.
-                    // Let's close after a short delay if success
-                    setTimeout(onClose, 1000); 
-                }
+                if (format !== 'pdf') onClose();
+                else setTimeout(onClose, 1000); 
             };
 
             return (
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-                    <div className="bg-white rounded-lg p-6 w-96 shadow-xl relative">
+                    <div className="bg-white rounded-lg p-6 w-96 shadow-xl relative" style={{zIndex: 1000}}>
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="download" /> Xuất dữ liệu</h3>
-                        
                         {status && (
                             <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-lg z-10 flex-col gap-2">
                                 <Icon name="loader-2" className="animate-spin text-blue-600" size={32} />
                                 <span className="text-sm font-medium text-blue-700">{status}</span>
                             </div>
                         )}
-
                         <div className="mb-4">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Định dạng:</label>
                             <select className="w-full border rounded p-2" value={format} onChange={e => setFormat(e.target.value)}>
@@ -319,7 +400,7 @@
                         </div>
                         <div className="mb-4 max-h-48 overflow-y-auto border rounded p-2 custom-scroll">
                             <div className="flex justify-between mb-2 pb-2 border-b"><span className="text-sm font-bold">Chọn mục để xuất:</span><button onClick={toggleAll} className="text-xs text-blue-600">Toggle All</button></div>
-                            {categories.map(cat => (
+                            {displayCategories.map(cat => (
                                 <label key={cat.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50">
                                     <input type="checkbox" checked={selectedCats.includes(cat.id)} onChange={() => toggleCat(cat.id)} className="rounded text-blue-600" />
                                     <span className="text-sm truncate">{cat.name}</span>
@@ -336,7 +417,7 @@
             );
         };
 
-        const FileLibrary = ({ files, onToggle, onDelete, onDrop }) => {
+        const FileLibrary = ({ files, onToggle, onDelete, onDrop, onUpdatePageRange }) => {
             const fileInputRef = useRef(null);
             const [dragActive, setDragActive] = useState(false);
 
@@ -354,11 +435,21 @@
             const selectedCount = files.filter(f => f.selected).length;
 
             return (
-                <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border relative" onDragEnter={handleDrag}>
+                <div 
+                    className="flex flex-col h-full bg-white rounded-lg shadow-sm border relative" 
+                    onDragEnter={handleDrag} 
+                    onDragOver={handleDrag} 
+                    onDrop={handleDrop}
+                >
                     {dragActive && (
-                        <div className="absolute inset-0 bg-blue-50 bg-opacity-95 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-blue-500 border-dashed animate-pulse" onDragLeave={handleDrag} onDragOver={handleDrag} onDrop={handleDrop}>
-                            <Icon name="upload-cloud" size={48} className="text-blue-600 mb-2" />
-                            <span className="text-lg font-bold text-blue-700">Thả file vào đây để thêm</span>
+                        <div 
+                            className="absolute inset-0 bg-blue-50 bg-opacity-95 z-50 flex flex-col items-center justify-center rounded-lg border-2 border-blue-500 border-dashed animate-pulse" 
+                            onDragLeave={handleDrag} 
+                            onDragOver={handleDrag} 
+                            onDrop={handleDrop}
+                        >
+                            <Icon name="upload-cloud" size={48} className="text-blue-600 mb-2 pointer-events-none" />
+                            <span className="text-lg font-bold text-blue-700 pointer-events-none">Thả file vào đây để thêm</span>
                         </div>
                     )}
                     <div className="p-3 border-b flex justify-between items-center bg-gray-50">
@@ -371,9 +462,26 @@
                         ) : (
                             files.map(file => (
                                 <div key={file.id} className={`flex items-center gap-2 p-2 rounded border text-sm group ${file.selected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-transparent opacity-70'}`}>
-                                    <input type="checkbox" checked={file.selected} onChange={() => onToggle(file.id)} className="rounded text-blue-600 cursor-pointer" />
-                                    <div className="flex-1 min-w-0"><div className="truncate font-medium text-gray-700" title={file.name}>{file.name}</div><div className="text-[10px] text-gray-500 uppercase">{file.type} • {file.pages?.length || 0} trang</div></div>
-                                    <button onClick={() => onDelete(file.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} /></button>
+                                    <input type="checkbox" checked={file.selected} onChange={() => onToggle(file.id)} className="rounded text-blue-600 cursor-pointer flex-shrink-0" />
+                                    <div className="flex-1 min-w-0 grid grid-cols-12 gap-2 items-center">
+                                        <div className="col-span-7">
+                                            <div className="truncate font-medium text-gray-700" title={file.name}>{file.name}</div>
+                                            <div className="text-[10px] text-gray-500 uppercase">{file.type} • {file.pages?.length || 0} trang</div>
+                                        </div>
+                                        <div className="col-span-5 relative">
+                                             <label className="block text-[8px] text-gray-400 absolute -top-1.5 left-1 bg-white px-0.5">Trang:</label>
+                                             <input 
+                                                type="text" 
+                                                placeholder="Tất cả"
+                                                title="Nhập trang (VD: 1,3,5-10). Để trống = Tất cả"
+                                                className="w-full text-xs border rounded px-1 py-1 bg-white focus:ring-1 focus:ring-blue-500 outline-none text-gray-700 text-center placeholder:text-gray-300"
+                                                value={file.pageRange || ''}
+                                                onChange={(e) => onUpdatePageRange(file.id, e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        </div>
+                                    </div>
+                                    <button onClick={() => onDelete(file.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"><Icon name="trash-2" size={14} /></button>
                                 </div>
                             ))
                         )}
@@ -441,6 +549,53 @@
                             </div>
                         ))}
                     </div>
+                    <div className="p-2 bg-yellow-50 text-[10px] text-yellow-800 border-t flex items-center gap-1">
+                        <Icon name="info" size={12} />
+                        <span>Bỏ tích tất cả để trích xuất toàn bộ file.</span>
+                    </div>
+                </div>
+            );
+        };
+
+        // New Component: Editable Content Cell
+        const EditableCell = ({ content, keyword, onSave }) => {
+            const [isEditing, setIsEditing] = useState(false);
+            const [value, setValue] = useState("");
+
+            const startEditing = () => {
+                const plainText = content.replace(/<[^>]*>?/gm, '');
+                setValue(plainText);
+                setIsEditing(true);
+            };
+
+            const save = () => {
+                setIsEditing(false);
+                if (value !== content.replace(/<[^>]*>?/gm, '')) {
+                    onSave(value); 
+                }
+            };
+
+            if (isEditing) {
+                return (
+                    <div className="editing h-full min-h-[60px]">
+                        <textarea 
+                            autoFocus 
+                            value={value} 
+                            onChange={(e) => setValue(e.target.value)} 
+                            onBlur={save}
+                            onKeyDown={(e) => { if(e.key === 'Escape') setIsEditing(false); }}
+                        />
+                    </div>
+                );
+            }
+
+            return (
+                <div 
+                    className="max-h-64 overflow-y-auto custom-scroll editable-cell p-1 rounded transition-colors relative" 
+                    onDoubleClick={startEditing}
+                    title="Double-click để sửa nội dung"
+                >
+                    <div dangerouslySetInnerHTML={{ __html: content.replace(new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<span class="highlight">$1</span>') }} />
                 </div>
             );
         };
@@ -467,48 +622,109 @@
                 }).join('\n');
             };
 
+            const handlePageRangeUpdate = (fileId, newRange) => {
+                const updatedLib = data.library.map(f => f.id === fileId ? { ...f, pageRange: newRange } : f);
+                updateTab(tabId, { ...data, library: updatedLib });
+            };
+
+            const handleResultEdit = (resultId, newContext) => {
+                const updatedResults = data.results.map(r => 
+                    r.id === resultId ? { ...r, context: newContext } : r
+                );
+                updateTab(tabId, { ...data, results: updatedResults });
+            };
+
             const runExtraction = (filesToScan) => {
                 setProcessing(true);
-                const activeCategories = data.categories.filter(c => c.active !== false);
+                let activeCategories = data.categories.filter(c => c.active !== false);
 
                 if (activeCategories.length === 0) {
-                    alert("Vui lòng chọn ít nhất một 'Cấu trúc trích xuất' (tích vào ô vuông) để chạy.");
-                    setProcessing(false);
-                    return;
+                    activeCategories = [{ 
+                        id: 'all_content', 
+                        name: 'Toàn bộ nội dung', 
+                        keywords: null 
+                    }];
                 }
 
                 let newResults = [];
                 const activeFiles = filesToScan.filter(f => f.selected);
 
+                if (activeFiles.length === 0) {
+                     alert("Vui lòng chọn ít nhất một file để xử lý.");
+                     setProcessing(false);
+                     return;
+                }
+
                 setTimeout(() => {
                     try {
                         activeFiles.forEach(fileData => {
+                            const allowedPages = parsePageRange(fileData.pageRange);
+
                             fileData.pages.forEach(page => {
+                                if (allowedPages && typeof page.pageIndex === 'number' && !allowedPages.has(page.pageIndex)) {
+                                    return;
+                                }
+
                                 activeCategories.forEach(cat => {
-                                    let searchTerms = [cat.name];
-                                    if (cat.keywords && cat.keywords.trim() !== "") {
-                                        searchTerms = cat.keywords.split(',').map(k => k.trim()).filter(k => k);
-                                    }
-                                    searchTerms.forEach(term => {
-                                        const flags = data.settings.caseSensitive ? 'g' : 'gi';
-                                        const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
-                                        let match, matchCount = 0;
-                                        while ((match = regex.exec(page.text)) !== null && matchCount < 50) {
-                                            newResults.push({
-                                                id: generateId(),
-                                                fileName: fileData.name,
-                                                fileType: fileData.type,
-                                                categoryName: cat.name,
-                                                categoryId: cat.id,
-                                                keyword: term,
-                                                context: getLineContext(page.text, match.index),
-                                                fullContent: page.text,
-                                                pageIndex: page.pageIndex,
-                                                date: new Date().toLocaleString()
-                                            });
-                                            matchCount++;
+                                    if (cat.keywords === null) {
+                                        const transformedText = applyTextTransform(page.text, data.settings.textTransform);
+                                        newResults.push({
+                                            id: generateId(),
+                                            fileName: fileData.name,
+                                            fileType: fileData.type,
+                                            categoryName: cat.name,
+                                            categoryId: cat.id,
+                                            keyword: "(Toàn bộ)",
+                                            context: transformedText,
+                                            fullContent: transformedText,
+                                            pageIndex: page.pageIndex,
+                                            date: new Date().toLocaleString()
+                                        });
+                                    } else {
+                                        let searchTerms = [cat.name];
+                                        if (cat.keywords && cat.keywords.trim() !== "") {
+                                            searchTerms = cat.keywords.split(',').map(k => k.trim()).filter(k => k);
                                         }
-                                    });
+                                        searchTerms.forEach(term => {
+                                            const flags = data.settings.caseSensitive ? 'g' : 'gi';
+                                            const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+                                            let match, matchCount = 0;
+                                            while ((match = regex.exec(page.text)) !== null && matchCount < 50) {
+                                                const lines = page.text.split('\n');
+                                                let currentPos = 0, targetLineIndex = -1;
+                                                for (let i = 0; i < lines.length; i++) {
+                                                    const lineLen = lines[i].length + 1; 
+                                                    if (match.index >= currentPos && match.index < currentPos + lineLen) { targetLineIndex = i; break; }
+                                                    currentPos += lineLen;
+                                                }
+                                                
+                                                let contextStr = "Context Error";
+                                                if (targetLineIndex !== -1) {
+                                                    const startLine = Math.max(0, targetLineIndex - 5);
+                                                    const endLine = Math.min(lines.length, targetLineIndex + 6);
+                                                    contextStr = lines.slice(startLine, endLine).map((line, idx) => {
+                                                        const isTarget = (startLine + idx) === targetLineIndex;
+                                                        const tLine = applyTextTransform(line, data.settings.textTransform);
+                                                        return isTarget ? `<span class="target-line">${tLine}</span>` : `<span class="context-line text-gray-500">${tLine}</span>`;
+                                                    }).join('\n');
+                                                }
+
+                                                newResults.push({
+                                                    id: generateId(),
+                                                    fileName: fileData.name,
+                                                    fileType: fileData.type,
+                                                    categoryName: cat.name,
+                                                    categoryId: cat.id,
+                                                    keyword: term,
+                                                    context: contextStr,
+                                                    fullContent: page.text,
+                                                    pageIndex: page.pageIndex,
+                                                    date: new Date().toLocaleString()
+                                                });
+                                                matchCount++;
+                                            }
+                                        });
+                                    }
                                 });
                             });
                         });
@@ -532,7 +748,8 @@
                         name: file.name,
                         type: file.name.split('.').pop(),
                         pages: pages,
-                        selected: true 
+                        selected: true,
+                        pageRange: "" 
                     });
                 }
                 const updatedLibrary = [...data.library, ...newFiles];
@@ -550,6 +767,21 @@
                 runExtraction(updatedLib);
             };
             const handleManualScan = () => runExtraction(data.library);
+
+            // SMART TRANSFORM EFFECT: Updates data in-place instead of re-scanning
+            useEffect(() => {
+                if (data.results.length > 0) {
+                    const updatedResults = data.results.map(r => ({
+                        ...r,
+                        context: transformHtmlContent(r.context, data.settings.textTransform),
+                        // fullContent is usually plain text but might have tags if raw extraction failed? 
+                        // Usually it's safe to transform as plain text, but to be safe we check.
+                        fullContent: applyTextTransform(r.fullContent, data.settings.textTransform)
+                    }));
+                    updateTab(tabId, { ...data, results: updatedResults });
+                }
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+            }, [data.settings.textTransform]);
 
             const groupedResults = useMemo(() => {
                 const groups = {};
@@ -574,6 +806,31 @@
                 return newGroups;
             }, [groupedResults, searchTerm]);
 
+            // Function to copy displayed table data (Context Only)
+            const handleCopyData = () => {
+                let textToCopy = "";
+                
+                Object.keys(filteredGroups).forEach(catName => {
+                    filteredGroups[catName].forEach(row => {
+                        // Remove HTML tags to get plain text
+                        // Replace newlines with spaces to keep it on one line per result, 
+                        // making it easy to paste into a column in Excel.
+                        const cleanContext = row.context.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').trim();
+                        if (cleanContext) {
+                            textToCopy += `${cleanContext}\n`;
+                        }
+                    });
+                });
+
+                if (!textToCopy) {
+                    alert("Không có dữ liệu để sao chép.");
+                    return;
+                }
+
+                copyToClipboard(textToCopy);
+                alert("Đã sao chép cột 'Nội dung' vào Clipboard!");
+            };
+
             if (!isActive) return <div className="hidden"></div>;
 
             const totalFiles = data.library.length;
@@ -584,22 +841,23 @@
                 <div className="h-full flex flex-col p-4 gap-4 overflow-hidden relative">
                     <ExportModal isOpen={exportModalOpen} onClose={() => setExportModalOpen(false)} categories={data.categories} data={data} onExport={(fmt, cats, setSts) => exportData(data, {format: fmt, selectedCategories: cats}, setSts)} />
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[40vh] min-h-[300px] shrink-0">
-                        {/* Categories (3/12) */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[45vh] min-h-[450px] shrink-0">
                         <div className="lg:col-span-3 h-full">
                             <CategoryManager categories={data.categories} onChange={(newCats) => updateTab(tabId, { ...data, categories: newCats })} />
                         </div>
 
-                        {/* Library (5/12) */}
                         <div className="lg:col-span-5 h-full">
-                            <FileLibrary files={data.library} onToggle={toggleFile} onDelete={deleteFile} onDrop={handleFileUpload} />
+                            <FileLibrary 
+                                files={data.library} 
+                                onToggle={toggleFile} 
+                                onDelete={deleteFile} 
+                                onDrop={handleFileUpload} 
+                                onUpdatePageRange={handlePageRangeUpdate}
+                            />
                         </div>
 
-                        {/* Controls (4/12) */}
-                        <div className="lg:col-span-4 h-full bg-white rounded-lg shadow-sm border p-4 flex flex-col gap-4">
-                            
-                            {/* Settings Section */}
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div className="lg:col-span-4 h-full bg-white rounded-lg shadow-sm border p-4 flex flex-col gap-4 overflow-y-auto custom-scroll">
+                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shrink-0">
                                 <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2 text-sm">
                                     <Icon name="settings" size={16} /> Cấu hình Xử lý
                                 </h3>
@@ -626,11 +884,26 @@
                                             className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                                         />
                                     </label>
+                                    <div className="h-px bg-gray-200"></div>
+                                    <div className="flex flex-col gap-2 opacity-70">
+                                        <span className="text-sm font-medium text-gray-700">Định dạng (Cũng có ở bên phải):</span>
+                                        <select 
+                                            className="w-full text-sm border rounded p-1.5 bg-white outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={data.settings.textTransform || 'none'}
+                                            onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, textTransform: e.target.value } })}
+                                        >
+                                            <option value="none">Giữ nguyên</option>
+                                            <option value="uppercase">CHỮ HOA</option>
+                                            <option value="lowercase">chữ thường</option>
+                                            <option value="sentence_case">Chữ hoa đầu dòng</option>
+                                            <option value="no_accent_upper">CHỮ HOA KHÔNG DẤU</option>
+                                            <option value="no_accent_upper_alpha">HOA KHÔNG DẤU (CHỈ LẤY CHỮ)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Status Section */}
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex-1">
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 shrink-0">
                                 <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-sm">
                                     <Icon name="activity" size={16} /> Trạng thái
                                 </h3>
@@ -641,7 +914,7 @@
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Cấu trúc bật:</span>
-                                        <span className="font-bold text-green-600">{activeCategoriesCount} / {data.categories.length}</span>
+                                        <span className="font-bold text-green-600">{activeCategoriesCount === 0 ? "TOÀN BỘ" : `${activeCategoriesCount} / ${data.categories.length}`}</span>
                                     </div>
                                     <div className="flex justify-between border-t border-blue-200 pt-2">
                                         <span>Kết quả:</span>
@@ -650,8 +923,7 @@
                                 </div>
                             </div>
 
-                            {/* Action Button */}
-                            <div>
+                            <div className="shrink-0 mt-auto pb-1">
                                 {processing ? (
                                     <button disabled className="w-full py-3 bg-gray-100 text-gray-400 rounded font-bold flex items-center justify-center gap-2 cursor-wait">
                                         <Icon name="loader-2" className="animate-spin" /> Đang xử lý...
@@ -667,17 +939,39 @@
 
                     <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm border overflow-hidden min-h-0">
                         <div className="p-3 border-b flex items-center justify-between gap-4 bg-gray-50 shrink-0">
-                            <div className="flex items-center gap-2 flex-1 max-w-md bg-white border rounded px-3 py-1.5 shadow-sm focus-within:ring-2 ring-blue-100">
+                            <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border rounded px-3 py-1.5 shadow-sm focus-within:ring-2 ring-blue-100">
                                 <Icon name="search" size={16} className="text-gray-400" />
                                 <input type="text" placeholder="Tìm kiếm trong kết quả..." className="bg-transparent outline-none text-sm w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                             </div>
+
                             <div className="flex items-center gap-2">
-                                <button onClick={() => updateTab(tabId, {...data, results: []})} className="p-2 hover:bg-red-100 text-red-600 rounded flex items-center gap-1 text-sm font-medium">
-                                    <Icon name="trash-2" size={16} /> Xóa KQ
-                                </button>
+                                <div className="flex items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm" title="Chuyển đổi định dạng kết quả nhanh">
+                                    <Icon name="type" size={16} className="text-blue-600" />
+                                    <select 
+                                        className="text-xs font-medium bg-transparent outline-none text-gray-700 cursor-pointer min-w-[100px]"
+                                        value={data.settings.textTransform || 'none'}
+                                        onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, textTransform: e.target.value } })}
+                                    >
+                                        <option value="none">Giữ nguyên</option>
+                                        <option value="uppercase">CHỮ HOA</option>
+                                        <option value="lowercase">chữ thường</option>
+                                        <option value="sentence_case">Chữ hoa đầu dòng</option>
+                                        <option value="no_accent_upper">HOA KHÔNG DẤU</option>
+                                        <option value="no_accent_upper_alpha">HOA KHÔNG DẤU (CHỈ LẤY CHỮ)</option>
+                                    </select>
+                                </div>
+
                                 <div className="h-6 w-px bg-gray-300 mx-1"></div>
-                                <button onClick={() => setExportModalOpen(true)} className="flex items-center gap-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold shadow-sm transition-colors">
-                                    <Icon name="download" size={16} /> Xuất Báo Cáo
+
+                                <button onClick={handleCopyData} className="p-2 hover:bg-blue-100 text-blue-600 rounded flex items-center gap-1 text-sm font-medium" title="Copy cột NỘI DUNG vào Clipboard">
+                                    <Icon name="copy" size={16} />
+                                </button>
+
+                                <button onClick={() => updateTab(tabId, {...data, results: []})} className="p-2 hover:bg-red-100 text-red-600 rounded flex items-center gap-1 text-sm font-medium" title="Xóa toàn bộ kết quả">
+                                    <Icon name="trash-2" size={16} />
+                                </button>
+                                <button onClick={() => setExportModalOpen(true)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold shadow-sm transition-colors">
+                                    <Icon name="download" size={16} /> Xuất
                                 </button>
                             </div>
                         </div>
@@ -686,7 +980,7 @@
                             {Object.keys(filteredGroups).length === 0 ? (
                                 <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
                                     <Icon name="inbox" size={48} />
-                                    <p className="mt-2 text-sm">Chưa có kết quả nào cho các cấu trúc đã chọn.</p>
+                                    <p className="mt-2 text-sm">Chưa có kết quả nào.</p>
                                 </div>
                             ) : (
                                 Object.entries(filteredGroups).map(([catName, rows]) => (
@@ -696,11 +990,12 @@
                                                 <Icon name="folder" size={16} /> {catName}
                                                 <span className="text-xs font-normal bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">{rows.length}</span>
                                             </h3>
+                                            <span className="text-[10px] text-gray-400 italic">Lưu ý: Chạy lại trích xuất sẽ ghi đè sửa đổi thủ công.</span>
                                         </div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left text-sm">
                                                 <thead className="bg-gray-50 text-gray-600 font-medium border-b text-xs uppercase">
-                                                    <tr><th className="p-3 w-48">Nguồn File</th><th className="p-3 w-32">Từ khóa</th><th className="p-3">Ngữ cảnh</th></tr>
+                                                    <tr><th className="p-3 w-48">Nguồn File</th><th className="p-3 w-32">Từ khóa</th><th className="p-3">Ngữ cảnh <span className="normal-case font-normal text-gray-400">(Double-click để sửa)</span></th></tr>
                                                 </thead>
                                                 <tbody className="divide-y">
                                                     {rows.map(row => (
@@ -711,7 +1006,11 @@
                                                             </td>
                                                             <td className="p-3 align-top"><span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs border inline-block">{row.keyword}</span></td>
                                                             <td className="p-3 text-gray-600 text-xs font-mono whitespace-pre-wrap bg-gray-50 rounded m-2 border">
-                                                                <div dangerouslySetInnerHTML={{ __html: row.context.replace(new RegExp(`(${row.keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), '<span class="highlight">$1</span>') }} />
+                                                                <EditableCell 
+                                                                    content={row.context} 
+                                                                    keyword={row.keyword} 
+                                                                    onSave={(newVal) => handleResultEdit(row.id, newVal)} 
+                                                                />
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -739,7 +1038,7 @@
                     ],
                     library: [], 
                     results: [],
-                    settings: { useOCR: false, caseSensitive: false }
+                    settings: { useOCR: false, caseSensitive: false, textTransform: 'none' }
                 }];
                 if (saved) {
                     const parsed = JSON.parse(saved);
@@ -748,8 +1047,23 @@
                 }
                 return defaultData;
             });
-            const [activeTabId, setActiveTabId] = useState(() => tabs[0]?.id || 'default');
+            
+            // Initialize activeTabId from localStorage
+            const [activeTabId, setActiveTabId] = useState(() => {
+                const savedId = localStorage.getItem('extractor_v4_active_tab');
+                // Ensure the saved ID actually exists in current tabs
+                if (savedId && saved.some(t => t.id === savedId)) {
+                    return savedId;
+                }
+                return tabs[0]?.id || 'default';
+            });
 
+            // Save active tab ID whenever it changes
+            useEffect(() => {
+                localStorage.setItem('extractor_v4_active_tab', activeTabId);
+            }, [activeTabId]);
+
+            // Existing effect to save tabs data
             useEffect(() => {
                 try {
                     const tabsToSave = tabs.map(tab => ({
@@ -762,11 +1076,33 @@
             }, [tabs]);
 
             const updateTab = (id, newData) => setTabs(tabs.map(t => t.id === id ? { ...newData } : t));
+            
             const addTab = () => {
+                const currentTab = tabs.find(t => t.id === activeTabId) || tabs[0];
                 const newId = generateId();
-                setTabs([...tabs, { id: newId, name: `Dự án ${tabs.length+1}`, categories: [{id: generateId(), name: 'Mục 1', keywords: '', active: true}], library: [], results: [], settings: { useOCR: false, caseSensitive: false } }]);
+                
+                // Clone categories (deep copy to avoid reference issues)
+                // If currentTab exists, clone its categories. Otherwise use default.
+                const initialCategories = currentTab 
+                    ? currentTab.categories.map(c => ({...c, id: generateId()})) 
+                    : [{id: generateId(), name: 'Mục 1', keywords: '', active: true}];
+                
+                // Clone settings
+                const initialSettings = currentTab 
+                    ? {...currentTab.settings} 
+                    : { useOCR: false, caseSensitive: false, textTransform: 'none' };
+
+                setTabs([...tabs, { 
+                    id: newId, 
+                    name: `Dự án ${tabs.length+1}`, 
+                    categories: initialCategories, 
+                    library: [], 
+                    results: [], 
+                    settings: initialSettings
+                }]);
                 setActiveTabId(newId);
             };
+            
             const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
             return (
