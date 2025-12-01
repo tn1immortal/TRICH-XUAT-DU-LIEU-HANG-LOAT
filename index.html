@@ -4,46 +4,49 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Super Data Extractor Pro v4.17 (Smart Defaults)</title>
-    
-    <!-- Tailwind CSS -->
+
+    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- PDF & OCR Support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    
+    <!-- Export Support -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <!-- Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Libraries for File Processing -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    
-    <!-- Tesseract OCR (v4) -->
-    <script src="https://unpkg.com/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
-    
-    <!-- Export Libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.1/jspdf.plugin.autotable.min.js"></script>
-
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
-        .highlight { background-color: #fde047; padding: 0 2px; border-radius: 2px; font-weight: 500; border-bottom: 2px solid #eab308; }
-        .context-line { display: block; min-height: 1.2em; }
-        .target-line { background-color: #fffbeb; font-weight: 500; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; overflow: hidden; height: 100vh; }
+        
+        /* Custom Scrollbar */
         .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Highlight & Editable */
+        .highlight { background-color: #fef08a; color: #854d0e; font-weight: bold; border-radius: 2px; padding: 0 2px; }
+        .target-line { background-color: #eff6ff; display: block; padding: 2px 4px; border-left: 3px solid #3b82f6; font-weight: 500; color: #1e293b; }
+        .context-line { display: block; padding: 0 4px; color: #64748b; }
         
         .editable-cell:hover { background-color: #fff; box-shadow: inset 0 0 0 1px #3b82f6; cursor: text; }
-        .editing textarea { width: 100%; height: 100%; min-height: 60px; outline: none; border: 2px solid #3b82f6; border-radius: 4px; padding: 4px; font-family: monospace; font-size: 0.75rem; resize: vertical; }
+        .editing textarea { width: 100%; height: 100%; min-height: 60px; outline: none; border: 2px solid #3b82f6; border-radius: 4px; padding: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; resize: vertical; }
+
+        /* Animations */
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        .cursor-wait { cursor: wait; }
     </style>
 </head>
 <body>
@@ -52,24 +55,15 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-        // --- UTILS ---
+        // --- ICONS ---
         const Icon = ({ name, size = 16, className = "" }) => {
-            const ref = useRef(null);
             useEffect(() => {
-                if (window.lucide && ref.current) {
-                    const i = document.createElement('i');
-                    i.setAttribute('data-lucide', name);
-                    i.setAttribute('width', size);
-                    i.setAttribute('height', size);
-                    if (className) i.setAttribute('class', className);
-                    ref.current.innerHTML = '';
-                    ref.current.appendChild(i);
-                    window.lucide.createIcons({ root: ref.current });
-                }
-            }, [name, size, className]);
-            return <span ref={ref} style={{ display: 'inline-flex' }}></span>;
+                if (window.lucide) window.lucide.createIcons();
+            }, [name]);
+            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
 
+        // --- UTILS ---
         const generateId = () => Math.random().toString(36).substr(2, 9);
 
         const removeVietnameseTones = (str) => {
@@ -102,7 +96,7 @@
                 case 'no_accent_upper':
                     return removeVietnameseTones(text).toUpperCase();
                 case 'no_accent_upper_alpha':
-                    return removeVietnameseTones(text).toUpperCase().replace(/[^A-Z\s]/g, '');
+                    return removeVietnameseTones(text).toUpperCase().replace(/[^A-Z0-9\s]/g, '');
                 default: return text;
             }
         }
@@ -110,6 +104,7 @@
         const transformHtmlContent = (htmlContent, mode) => {
             if (!htmlContent) return "";
             if (mode === 'none') return htmlContent;
+            // Split by tags to only transform text content
             const parts = htmlContent.split(/(<[^>]+>)/g);
             return parts.map(part => {
                 if (part.trim().startsWith('<')) {
@@ -144,17 +139,18 @@
             textArea.value = text;
             textArea.style.position = "fixed";
             textArea.style.left = "-9999px";
-            textArea.style.top = "0";
             document.body.appendChild(textArea);
-            textArea.focus();
             textArea.select();
             try {
-                const successful = document.execCommand('copy');
-                if (!successful) console.error('Fallback: Copying text command was unsuccessful');
+                document.execCommand('copy');
             } catch (err) {
-                console.error('Fallback: Oops, unable to copy', err);
+                console.error('Fallback copy failed', err);
             }
             document.body.removeChild(textArea);
+        };
+
+        const getLineContext = (fullText, index) => {
+            return "Deprecated in favor of new logic"; 
         };
 
         // --- FILE PROCESSING ---
@@ -163,32 +159,17 @@
             let pages = []; 
 
             try {
-                if (['txt', 'html', 'htm', 'md', 'csv', 'xml', 'json', 'mhtml', 'mht', 'doc'].includes(fileType)) {
+                if (['txt', 'html', 'htm', 'md', 'csv', 'xml', 'json', 'mhtml', 'mht'].includes(fileType)) {
                     const text = await file.text();
                     pages.push({ pageIndex: 1, text: text });
                 }
-                else if (fileType === 'docx') {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const result = await mammoth.extractRawText({ arrayBuffer });
-                    pages.push({ pageIndex: 1, text: result.value });
-                }
-                else if (['xls', 'xlsx'].includes(fileType)) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    const workbook = XLSX.read(arrayBuffer);
-                    workbook.SheetNames.forEach((sheetName) => {
-                        const rowObject = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1});
-                        const text = rowObject.map(row => row.join(" ")).join("\n");
-                        pages.push({ pageIndex: `Sheet: ${sheetName}`, text: text });
-                    });
-                }
                 else if (fileType === 'pdf') {
                     const arrayBuffer = await file.arrayBuffer();
-                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-                    const pdf = await loadingTask.promise;
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
                     for (let i = 1; i <= pdf.numPages; i++) {
                         const page = await pdf.getPage(i);
-                        const content = await page.getTextContent();
-                        const text = content.items.map(item => item.str).join(" ");
+                        const textContent = await page.getTextContent();
+                        const text = textContent.items.map(item => item.str).join(' ');
                         pages.push({ pageIndex: i, text: text });
                     }
                 }
@@ -197,29 +178,33 @@
                         pages.push({ pageIndex: 1, text: "[Ảnh: Hãy bật chế độ OCR trong cấu hình để đọc nội dung ảnh]" });
                     } else {
                         try {
-                            const worker = await Tesseract.createWorker();
-                            await worker.loadLanguage('vie');
-                            await worker.initialize('vie');
+                            const worker = await Tesseract.createWorker('vie');
                             const ret = await worker.recognize(file);
-                            await worker.terminate();
                             pages.push({ pageIndex: 1, text: ret.data.text });
-                        } catch (ocrErr) {
-                            console.error("OCR Error:", ocrErr);
-                            pages.push({ pageIndex: 1, text: `[Lỗi OCR: ${ocrErr.message}]` });
+                            await worker.terminate();
+                        } catch (e) {
+                            console.error("OCR Error:", e);
+                            pages.push({ pageIndex: 1, text: `[Lỗi OCR: ${e.message}]` });
                         }
                     }
                 } else {
-                    try {
-                        const text = await file.text();
-                        pages.push({ pageIndex: 1, text: text.substring(0, 1000) + "\n...[File binary hoặc định dạng lạ]..." });
-                    } catch (e) {
-                         pages.push({ pageIndex: 0, text: `[Định dạng .${fileType} chưa hỗ trợ]` });
-                    }
+                     // Fallback for binary/unsupported
+                     pages.push({ pageIndex: 0, text: `[Định dạng .${fileType} chưa hỗ trợ trích xuất nội dung]` });
+                     try {
+                        // Attempt text read anyway for some formats
+                         const text = await file.text();
+                         // Simple check if it looks like binary
+                         if (/[\x00-\x08\x0E-\x1F]/.test(text.substring(0, 100))) {
+                             // Binary detected
+                         } else {
+                            pages.push({ pageIndex: 1, text: text.substring(0, 2000) + "\n...[File có thể chưa được đọc trọn vẹn]..." });
+                         }
+                     } catch(e) {}
                 }
                 return pages;
             } catch (error) {
-                console.error(error);
-                return [{ pageIndex: 0, text: `Lỗi đọc file: ${error.message}` }];
+                console.error("File reading error:", error);
+                return [{ pageIndex: 0, text: `[Lỗi đọc file: ${error.message}]` }];
             }
         };
 
@@ -234,76 +219,55 @@
             } else {
                 rowsToExport = data.results.filter(r => selectedCategories.includes(r.categoryId));
             }
-            
+
             if (rowsToExport.length === 0) {
                 alert("Không có dữ liệu nào khớp với các mục đã chọn.");
                 return;
             }
+
             const fileName = `Export_${new Date().toISOString().slice(0,10)}`;
 
             if (format === 'excel') {
-                const flatRows = rowsToExport.map(r => ({
-                    Category: r.categoryName,
-                    FileName: r.fileName,
-                    Page: r.pageIndex,
-                    Keyword: r.keyword,
-                    Context: r.context.replace(/<[^>]*>?/gm, ' ').replace(/\n/g, ' '),
-                    Date: r.date
+                const wsData = rowsToExport.map(r => ({
+                    'Mục': r.categoryName,
+                    'File': r.fileName,
+                    'Trang': r.pageIndex,
+                    'Từ khóa': r.keyword,
+                    'Nội dung': r.context.replace(/<[^>]*>?/gm, ' ').replace(/\n/g, ' ').trim()
                 }));
-                const worksheet = XLSX.utils.json_to_sheet(flatRows);
-                const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-                XLSX.writeFile(workbook, `${fileName}.xlsx`);
+                const ws = XLSX.utils.json_to_sheet(wsData);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Data");
+                XLSX.writeFile(wb, `${fileName}.xlsx`);
             }
             else if (format === 'pdf') {
-                if (setExportStatus) setExportStatus("Đang tải font tiếng Việt...");
+                if (setExportStatus) setExportStatus("Đang tạo PDF...");
+                
+                // Simple PDF using jsPDF AutoTable
+                // Note: Standard fonts might not support Vietnamese well without custom font loading
+                // Here we use a safe default approach
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
-
-                try {
-                    const fontUrl = "https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.66/fonts/Roboto/Roboto-Regular.ttf";
-                    const response = await fetch(fontUrl);
-                    const buffer = await response.arrayBuffer();
-                    const blob = new Blob([buffer]);
-                    const reader = new FileReader();
-                    reader.readAsDataURL(blob);
-                    await new Promise(resolve => {
-                        reader.onloadend = () => {
-                            const base64data = reader.result.split(',')[1];
-                            doc.addFileToVFS("Roboto-Regular.ttf", base64data);
-                            doc.addFont("Roboto-Regular.ttf", "Roboto", "normal");
-                            doc.setFont("Roboto");
-                            resolve();
-                        };
-                    });
-                } catch (e) {
-                    console.warn("Lỗi tải font:", e);
-                    alert("Không thể tải font tiếng Việt. File PDF có thể bị lỗi ký tự.");
-                }
-
-                if (setExportStatus) setExportStatus("Đang tạo PDF...");
-
+                
+                // Add title
+                doc.setFontSize(16);
+                doc.text("Bao cao trich xuat du lieu", 14, 15);
+                
                 const tableBody = rowsToExport.map(r => [
                     r.categoryName,
-                    `${r.fileName} (Trang ${r.pageIndex})`,
+                    `${r.fileName} (Trg ${r.pageIndex})`,
                     r.keyword,
-                    r.context.replace(/<[^>]*>?/gm, ' ').replace(/\n/g, ' ').substring(0, 1000)
+                    r.context.replace(/<[^>]*>?/gm, ' ').substring(0, 100) // Truncate for PDF stability
                 ]);
 
                 doc.autoTable({
-                    head: [['Mục', 'File/Trang', 'Từ khóa', 'Nội dung']],
+                    head: [['Muc', 'File', 'Tu khoa', 'Noi dung']],
                     body: tableBody,
-                    styles: { font: 'Roboto', fontSize: 9, cellPadding: 2 },
-                    columnStyles: { 0: { cellWidth: 25 }, 1: { cellWidth: 30 }, 2: { cellWidth: 20 }, 3: { cellWidth: 'auto' } },
-                    headStyles: { fillColor: [37, 99, 235] },
-                    margin: { top: 20 },
-                    didDrawPage: (data) => {
-                        doc.text("Báo cáo trích xuất dữ liệu", 14, 15);
-                        doc.setFontSize(8);
-                        doc.text(`Ngày xuất: ${new Date().toLocaleString()}`, 14, doc.internal.pageSize.height - 10);
-                    }
+                    startY: 25,
+                    styles: { fontSize: 9 },
+                    theme: 'grid'
                 });
-
+                
                 doc.save(`${fileName}.pdf`);
                 if (setExportStatus) setExportStatus(null);
             }
@@ -311,42 +275,27 @@
                 let htmlContent = `
                     <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
                     <head><meta charset='utf-8'><title>Export</title>
-                    <style>
-                        body { font-family: 'Times New Roman'; } table { border-collapse: collapse; width: 100%; }
-                        th, td { border: 1px solid #000; padding: 8px; vertical-align: top; text-align: left; }
-                        th { background-color: #f2f2f2; } .highlight { background-color: yellow; }
-                    </style></head><body>
+                    <style>table{border-collapse:collapse;width:100%;} th,td{border:1px solid #000;padding:5px;} .hl{background:yellow;}</style>
+                    </head><body>
                     <h2>Báo cáo trích xuất dữ liệu</h2>
-                    <table><thead><tr><th>File/Trang</th><th>Từ khóa</th><th>Nội dung</th></tr></thead><tbody>
-                `;
-                const groups = {};
-                rowsToExport.forEach(r => { if (!groups[r.categoryName]) groups[r.categoryName] = []; groups[r.categoryName].push(r); });
-                Object.keys(groups).forEach(cat => {
-                    htmlContent += `<tr style="background:#e0f2fe;font-weight:bold"><td colspan="3">${cat}</td></tr>`;
-                    groups[cat].forEach(r => {
-                        htmlContent += `<tr><td>${r.fileName}<br/><small>Trang ${r.pageIndex}</small></td><td>${r.keyword}</td><td>${r.context}</td></tr>`;
-                    });
-                });
-                htmlContent += `</tbody></table></body></html>`;
+                    <table>
+                        <thead><tr style="background:#ddd"><th>Mục</th><th>File/Trang</th><th>Từ khóa</th><th>Nội dung</th></tr></thead>
+                        <tbody>
+                            ${rowsToExport.map(r => `
+                                <tr>
+                                    <td>${r.categoryName}</td>
+                                    <td>${r.fileName} (Trang ${r.pageIndex})</td>
+                                    <td>${r.keyword}</td>
+                                    <td>${r.context}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table></body></html>`;
                 
-                let fileContent = htmlContent;
-                let mimeType = 'text/html';
-                let extension = 'html';
-
-                if (format === 'word') {
-                    mimeType = 'application/msword';
-                    extension = 'doc';
-                } else if (format === 'mhtml') {
-                    mimeType = 'multipart/related';
-                    extension = 'mht';
-                    const boundary = "----=_NextPart_000_0000_01D00000.00000000";
-                    fileContent = `MIME-Version: 1.0\nContent-Type: multipart/related; boundary="${boundary}"; type="text/html"\n\n--${boundary}\nContent-Type: text/html; charset="utf-8"\nContent-Transfer-Encoding: 8bit\n\n${htmlContent}\n\n--${boundary}--`;
-                }
-
-                const blob = new Blob([fileContent], { type: mimeType });
+                const blob = new Blob(['\ufeff', htmlContent], { type: format === 'word' ? 'application/msword' : 'text/html' });
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `${fileName}.${extension}`;
+                link.download = `${fileName}.${format === 'word' ? 'doc' : format}`;
                 link.click();
             }
         };
@@ -382,35 +331,35 @@
                 <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
                     <div className="bg-white rounded-lg p-6 w-96 shadow-xl relative" style={{zIndex: 1000}}>
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="download" /> Xuất dữ liệu</h3>
+                        
                         {status && (
                             <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-lg z-10 flex-col gap-2">
                                 <Icon name="loader-2" className="animate-spin text-blue-600" size={32} />
                                 <span className="text-sm font-medium text-blue-700">{status}</span>
                             </div>
                         )}
+
                         <div className="mb-4">
                             <label className="block text-sm font-medium text-gray-700 mb-2">Định dạng:</label>
                             <select className="w-full border rounded p-2" value={format} onChange={e => setFormat(e.target.value)}>
                                 <option value="excel">Excel (.xlsx)</option>
-                                <option value="pdf">PDF (.pdf)</option>
                                 <option value="word">Word (.doc)</option>
+                                <option value="pdf">PDF (.pdf)</option>
                                 <option value="html">HTML (.html)</option>
-                                <option value="mhtml">MHTML Archive (.mht)</option>
                             </select>
                         </div>
                         <div className="mb-4 max-h-48 overflow-y-auto border rounded p-2 custom-scroll">
-                            <div className="flex justify-between mb-2 pb-2 border-b"><span className="text-sm font-bold">Chọn mục để xuất:</span><button onClick={toggleAll} className="text-xs text-blue-600">Toggle All</button></div>
+                            <div className="flex justify-between mb-2 pb-2 border-b"><span className="text-sm font-bold">Chọn mục để xuất:</span><button onClick={toggleAll} className="text-xs text-blue-600">Chọn hết</button></div>
                             {displayCategories.map(cat => (
                                 <label key={cat.id} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50">
                                     <input type="checkbox" checked={selectedCats.includes(cat.id)} onChange={() => toggleCat(cat.id)} className="rounded text-blue-600" />
                                     <span className="text-sm truncate">{cat.name}</span>
-                                    <span className="text-xs text-gray-400 ml-auto">({data.results.filter(r => r.categoryId === cat.id).length})</span>
                                 </label>
                             ))}
                         </div>
                         <div className="flex justify-end gap-2">
-                            <button onClick={onClose} className="px-4 py-2 hover:bg-gray-100 rounded">Hủy</button>
-                            <button onClick={handleExportClick} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" disabled={selectedCats.length === 0}>Xuất File</button>
+                            <button onClick={onClose} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Hủy</button>
+                            <button onClick={handleExportClick} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Xuất Ngay</button>
                         </div>
                     </div>
                 </div>
@@ -421,16 +370,9 @@
             const fileInputRef = useRef(null);
             const [dragActive, setDragActive] = useState(false);
 
-            const handleDrag = (e) => {
-                e.preventDefault(); e.stopPropagation();
-                if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
-                else if (e.type === "dragleave") setDragActive(false);
-            };
-
-            const handleDrop = (e) => {
-                e.preventDefault(); e.stopPropagation(); setDragActive(false);
-                if (e.dataTransfer.files && e.dataTransfer.files[0]) onDrop(Array.from(e.dataTransfer.files));
-            };
+            const handleDrag = (e) => { e.preventDefault(); e.stopPropagation(); if (e.type === "dragenter" || e.type === "dragover") setDragActive(true); else if (e.type === "dragleave") setDragActive(false); };
+            const handleDrop = (e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files && e.dataTransfer.files[0]) onDrop(e.dataTransfer.files); };
+            const handleFileSelect = (e) => { if (e.target.files && e.target.files[0]) onDrop(e.target.files); };
 
             const selectedCount = files.filter(f => f.selected).length;
 
@@ -453,12 +395,15 @@
                         </div>
                     )}
                     <div className="p-3 border-b flex justify-between items-center bg-gray-50">
-                        <div className="flex items-center gap-2"><Icon name="library" size={16} className="text-blue-600" /><span className="font-bold text-sm text-gray-700">Thư viện File ({selectedCount}/{files.length})</span></div>
-                        <button onClick={() => fileInputRef.current.click()} className="text-blue-600 hover:bg-blue-100 p-1 rounded" title="Thêm file"><Icon name="plus" size={18} /></button>
+                        <div className="font-bold text-gray-700 flex items-center gap-2"><Icon name="files" size={16} /> Thư viện File <span className="text-xs font-normal bg-gray-200 px-2 py-0.5 rounded-full">{files.length}</span></div>
+                        <div className="flex gap-2">
+                            <button onClick={() => fileInputRef.current.click()} className="p-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" title="Thêm file"><Icon name="plus" size={16} /></button>
+                            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" multiple />
+                        </div>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scroll">
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scroll">
                         {files.length === 0 ? (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60"><Icon name="file-question" size={32} /><p className="text-xs mt-2 text-center">Thư viện trống.<br/>Kéo thả file vào đây.</p></div>
+                            <div className="text-center text-gray-400 mt-10 text-sm">Chưa có file nào.<br/>Kéo thả hoặc nhấn + để thêm.</div>
                         ) : (
                             files.map(file => (
                                 <div key={file.id} className={`flex items-center gap-2 p-2 rounded border text-sm group ${file.selected ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-transparent opacity-70'}`}>
@@ -486,69 +431,6 @@
                             ))
                         )}
                     </div>
-                    <div className="p-3 border-t bg-gray-50 hover:bg-gray-100 cursor-pointer text-center transition-colors" onClick={() => fileInputRef.current.click()}>
-                        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => e.target.files[0] && onDrop(Array.from(e.target.files))} />
-                        <div className="flex items-center justify-center gap-2 text-gray-500 text-xs font-medium"><Icon name="upload" size={14} /><span>Click để chọn file...</span></div>
-                    </div>
-                </div>
-            );
-        };
-
-        const CategoryManager = ({ categories, onChange }) => {
-            const addCategory = () => onChange([...categories, { id: generateId(), name: `Mục mới`, keywords: "", active: true }]);
-            const updateCategory = (id, field, value) => onChange(categories.map(c => c.id === id ? { ...c, [field]: value } : c));
-            const removeCategory = (id) => onChange(categories.filter(c => c.id !== id));
-            
-            const toggleActive = (id) => onChange(categories.map(c => c.id === id ? { ...c, active: !c.active } : c));
-            
-            const allActive = categories.length > 0 && categories.every(c => c.active !== false);
-            const toggleAll = () => {
-                const newState = !allActive;
-                onChange(categories.map(c => ({ ...c, active: newState })));
-            };
-
-            return (
-                <div className="space-y-2 h-full flex flex-col bg-white rounded-lg shadow-sm border">
-                    <div className="p-3 border-b bg-gray-50 flex items-center justify-between">
-                        <span className="font-bold text-sm text-gray-700 flex items-center gap-2"><Icon name="list-checks" size={16} /> Cấu trúc trích xuất</span>
-                        <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-1 text-[10px] text-blue-600 font-bold cursor-pointer hover:bg-blue-50 px-2 py-1 rounded">
-                                <input type="checkbox" checked={allActive} onChange={toggleAll} className="rounded text-blue-600" />
-                                All
-                            </label>
-                            <button onClick={addCategory} className="text-blue-600 hover:bg-blue-100 p-1 rounded" title="Thêm mục"><Icon name="plus" size={18} /></button>
-                        </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scroll">
-                        {categories.map((cat, idx) => (
-                            <div key={cat.id} className={`flex gap-2 items-start p-2 rounded border group transition-all duration-200 ${cat.active !== false ? 'bg-white border-blue-200 shadow-sm ring-1 ring-blue-50' : 'bg-gray-50 border-gray-100 opacity-60 grayscale'}`}>
-                                <div className="pt-2">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={cat.active !== false} 
-                                        onChange={() => toggleActive(cat.id)}
-                                        className="w-4 h-4 rounded text-blue-600 cursor-pointer"
-                                        title="Bật/Tắt mục này"
-                                    />
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                    <input 
-                                        type="text" placeholder="Tên mục (VD: Cửa)" 
-                                        className={`w-full text-sm font-bold bg-transparent border-b border-dashed focus:border-solid outline-none pb-1 ${cat.active !== false ? 'border-gray-300 focus:border-blue-500' : 'border-transparent cursor-not-allowed'}`}
-                                        value={cat.name} onChange={(e) => updateCategory(cat.id, 'name', e.target.value)}
-                                        disabled={cat.active === false}
-                                    />
-                                    <input 
-                                        type="text" placeholder="Từ khóa (phẩy để tách)..." 
-                                        className={`w-full text-xs bg-transparent outline-none placeholder-gray-400 ${cat.active !== false ? 'text-gray-600' : 'text-gray-400 cursor-not-allowed'}`}
-                                        value={cat.keywords} onChange={(e) => updateCategory(cat.id, 'keywords', e.target.value)}
-                                        disabled={cat.active === false}
-                                    />
-                                </div>
-                                <button onClick={() => removeCategory(cat.id)} className="text-gray-300 hover:text-red-500 pt-1 opacity-0 group-hover:opacity-100"><Icon name="x" size={14} /></button>
-                            </div>
-                        ))}
-                    </div>
                     <div className="p-2 bg-yellow-50 text-[10px] text-yellow-800 border-t flex items-center gap-1">
                         <Icon name="info" size={12} />
                         <span>Bỏ tích tất cả để trích xuất toàn bộ file.</span>
@@ -557,7 +439,38 @@
             );
         };
 
-        // New Component: Editable Content Cell
+        const CategoryManager = ({ categories, onChange }) => {
+            const addCat = () => onChange([...categories, { id: generateId(), name: `Mục ${categories.length + 1}`, keywords: '', active: true }]);
+            const updateCat = (id, field, val) => onChange(categories.map(c => c.id === id ? { ...c, [field]: val } : c));
+            const removeCat = (id) => onChange(categories.filter(c => c.id !== id));
+
+            return (
+                <div className="flex flex-col h-full bg-white rounded-lg shadow-sm border">
+                    <div className="p-3 border-b flex justify-between items-center bg-gray-50">
+                        <div className="font-bold text-gray-700 flex items-center gap-2"><Icon name="list" size={16} /> Cấu trúc trích xuất</div>
+                        <button onClick={addCat} className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center gap-1"><Icon name="plus-circle" size={14} /> Thêm mục</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scroll">
+                        {categories.map((cat, idx) => (
+                            <div key={cat.id} className="border rounded p-3 bg-gray-50 relative group hover:shadow-md transition-shadow">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <input type="checkbox" checked={cat.active !== false} onChange={(e) => updateCat(cat.id, 'active', e.target.checked)} className="rounded text-blue-600" title="Bật/Tắt mục này" />
+                                    <input type="text" value={cat.name} onChange={(e) => updateCat(cat.id, 'name', e.target.value)} className="flex-1 font-bold text-sm bg-transparent border-b border-dashed border-gray-300 focus:border-blue-500 outline-none" placeholder="Tên mục (VD: Họ tên)" />
+                                    <button onClick={() => removeCat(cat.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"><Icon name="x" size={14} /></button>
+                                </div>
+                                <textarea 
+                                    value={cat.keywords} 
+                                    onChange={(e) => updateCat(cat.id, 'keywords', e.target.value)} 
+                                    className="w-full text-xs p-2 border rounded resize-none h-16 focus:ring-1 focus:ring-blue-500 outline-none" 
+                                    placeholder="Nhập từ khóa ngăn cách bởi dấu phẩy (VD: Ông, Bà, Fullname)..." 
+                                />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
         const EditableCell = ({ content, keyword, onSave }) => {
             const [isEditing, setIsEditing] = useState(false);
             const [value, setValue] = useState("");
@@ -600,26 +513,92 @@
             );
         };
 
-        const Workspace = ({ tabId, data, updateTab, isActive }) => {
+        // --- MAIN APP ---
+        const App = () => {
+            const [tabs, setTabs] = useState(() => {
+                const saved = localStorage.getItem('extractor_v4_data');
+                const defaultData = [{ 
+                    id: 'default', 
+                    name: 'Dự án mẫu', 
+                    categories: [
+                        { id: 'c1', name: 'Email', keywords: 'email, @, mail', active: true },
+                        { id: 'c2', name: 'Số điện thoại', keywords: 'sđt, hotline, tel, phone', active: true }
+                    ], 
+                    library: [], 
+                    results: [],
+                    settings: { useOCR: false, caseSensitive: false, textTransform: 'none' }
+                }];
+                if (saved) {
+                    try { return JSON.parse(saved); } catch(e) { return defaultData; }
+                }
+                return defaultData;
+            });
+
+            const [activeTabId, setActiveTabId] = useState(() => {
+                const savedId = localStorage.getItem('extractor_v4_active_tab');
+                if (savedId && tabs.some(t => t.id === savedId)) return savedId;
+                return tabs[0]?.id || 'default';
+            });
+
             const [processing, setProcessing] = useState(false);
             const [searchTerm, setSearchTerm] = useState("");
             const [exportModalOpen, setExportModalOpen] = useState(false);
 
-            const getLineContext = (fullText, matchIndex) => {
-                const lines = fullText.split('\n');
-                let currentPos = 0, targetLineIndex = -1;
-                for (let i = 0; i < lines.length; i++) {
-                    const lineLen = lines[i].length + 1; 
-                    if (matchIndex >= currentPos && matchIndex < currentPos + lineLen) { targetLineIndex = i; break; }
-                    currentPos += lineLen;
+            useEffect(() => { localStorage.setItem('extractor_v4_data', JSON.stringify(tabs)); }, [tabs]);
+            useEffect(() => { localStorage.setItem('extractor_v4_active_tab', activeTabId); }, [activeTabId]);
+
+            const updateTab = (id, newData) => setTabs(tabs.map(t => t.id === id ? { ...newData } : t));
+            
+            const addTab = () => {
+                const currentTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+                const newId = generateId();
+                const initialCategories = currentTab ? currentTab.categories.map(c => ({...c, id: generateId()})) : [];
+                const initialSettings = currentTab ? {...currentTab.settings} : { useOCR: false, caseSensitive: false, textTransform: 'none' };
+
+                setTabs([...tabs, { 
+                    id: newId, 
+                    name: `Dự án ${tabs.length+1}`, 
+                    categories: initialCategories, 
+                    library: [], 
+                    results: [],
+                    settings: initialSettings
+                }]);
+                setActiveTabId(newId);
+            };
+            
+            const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+            const data = activeTab;
+            const tabId = activeTab.id;
+
+            const handleFileUpload = async (fileList) => {
+                setProcessing(true);
+                const newFiles = [];
+                for (let i = 0; i < fileList.length; i++) {
+                    const file = fileList[i];
+                    const pages = await extractContentFromFile(file, data.settings.useOCR);
+                    newFiles.push({ 
+                        id: generateId(), 
+                        name: file.name, 
+                        type: file.name.split('.').pop(), 
+                        pages: pages,
+                        selected: true,
+                        pageRange: "" 
+                    });
                 }
-                if (targetLineIndex === -1) return "Context Error";
-                const startLine = Math.max(0, targetLineIndex - 5);
-                const endLine = Math.min(lines.length, targetLineIndex + 6);
-                return lines.slice(startLine, endLine).map((line, idx) => {
-                    const isTarget = (startLine + idx) === targetLineIndex;
-                    return isTarget ? `<span class="target-line">${line}</span>` : `<span class="context-line text-gray-500">${line}</span>`;
-                }).join('\n');
+                const updatedLibrary = [...data.library, ...newFiles];
+                updateTab(tabId, { ...data, library: updatedLibrary });
+                setProcessing(false);
+            };
+
+            const toggleFile = (id) => {
+                const updatedLib = data.library.map(f => f.id === id ? { ...f, selected: !f.selected } : f);
+                updateTab(tabId, { ...data, library: updatedLib });
+            };
+
+            const deleteFile = (id) => {
+                if(!confirm("Bạn có chắc muốn xóa file này?")) return;
+                const updatedLib = data.library.filter(f => f.id !== id);
+                updateTab(tabId, { ...data, library: updatedLib });
             };
 
             const handlePageRangeUpdate = (fileId, newRange) => {
@@ -628,26 +607,33 @@
             };
 
             const handleResultEdit = (resultId, newContext) => {
-                const updatedResults = data.results.map(r => 
-                    r.id === resultId ? { ...r, context: newContext } : r
-                );
+                const updatedResults = data.results.map(r => r.id === resultId ? { ...r, context: newContext } : r);
                 updateTab(tabId, { ...data, results: updatedResults });
             };
 
-            const runExtraction = (filesToScan) => {
+            // Smart Transform Effect
+            useEffect(() => {
+                if (data.results.length > 0) {
+                    const updatedResults = data.results.map(r => ({
+                        ...r,
+                        context: transformHtmlContent(r.context, data.settings.textTransform),
+                        fullContent: applyTextTransform(r.fullContent, data.settings.textTransform)
+                    }));
+                    updateTab(tabId, { ...data, results: updatedResults });
+                }
+            }, [data.settings.textTransform]);
+
+            const runExtraction = () => {
                 setProcessing(true);
                 let activeCategories = data.categories.filter(c => c.active !== false);
-
+                
                 if (activeCategories.length === 0) {
-                    activeCategories = [{ 
-                        id: 'all_content', 
-                        name: 'Toàn bộ nội dung', 
-                        keywords: null 
-                    }];
+                     // Nếu không chọn mục nào, coi như trích xuất toàn bộ (Full Extract)
+                    activeCategories = [{ id: 'all_content', name: 'Toàn bộ nội dung', keywords: null }];
                 }
 
                 let newResults = [];
-                const activeFiles = filesToScan.filter(f => f.selected);
+                const activeFiles = data.library.filter(f => f.selected);
 
                 if (activeFiles.length === 0) {
                      alert("Vui lòng chọn ít nhất một file để xử lý.");
@@ -659,7 +645,7 @@
                     try {
                         activeFiles.forEach(fileData => {
                             const allowedPages = parsePageRange(fileData.pageRange);
-
+                            
                             fileData.pages.forEach(page => {
                                 if (allowedPages && typeof page.pageIndex === 'number' && !allowedPages.has(page.pageIndex)) {
                                     return;
@@ -667,6 +653,7 @@
 
                                 activeCategories.forEach(cat => {
                                     if (cat.keywords === null) {
+                                        // Full extract
                                         const transformedText = applyTextTransform(page.text, data.settings.textTransform);
                                         newResults.push({
                                             id: generateId(),
@@ -689,7 +676,7 @@
                                             const flags = data.settings.caseSensitive ? 'g' : 'gi';
                                             const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
                                             let match, matchCount = 0;
-                                            while ((match = regex.exec(page.text)) !== null && matchCount < 50) {
+                                            while ((match = regex.exec(page.text)) !== null && matchCount < 100) {
                                                 const lines = page.text.split('\n');
                                                 let currentPos = 0, targetLineIndex = -1;
                                                 for (let i = 0; i < lines.length; i++) {
@@ -698,14 +685,14 @@
                                                     currentPos += lineLen;
                                                 }
                                                 
-                                                let contextStr = "Context Error";
+                                                let contextStr = "";
                                                 if (targetLineIndex !== -1) {
-                                                    const startLine = Math.max(0, targetLineIndex - 5);
-                                                    const endLine = Math.min(lines.length, targetLineIndex + 6);
+                                                    const startLine = Math.max(0, targetLineIndex - 2);
+                                                    const endLine = Math.min(lines.length, targetLineIndex + 3);
                                                     contextStr = lines.slice(startLine, endLine).map((line, idx) => {
                                                         const isTarget = (startLine + idx) === targetLineIndex;
                                                         const tLine = applyTextTransform(line, data.settings.textTransform);
-                                                        return isTarget ? `<span class="target-line">${tLine}</span>` : `<span class="context-line text-gray-500">${tLine}</span>`;
+                                                        return isTarget ? `<span class="target-line">${tLine}</span>` : `<span class="context-line">${tLine}</span>`;
                                                     }).join('\n');
                                                 }
 
@@ -729,396 +716,199 @@
                             });
                         });
                         updateTab(tabId, { ...data, results: newResults });
-                    } catch (e) {
-                        console.error(e);
-                        alert("Có lỗi xảy ra khi quét: " + e.message);
-                    } finally {
-                        setProcessing(false);
+                        alert(`Đã trích xuất xong! Tìm thấy ${newResults.length} kết quả.`);
+                    } catch (err) {
+                        console.error(err);
+                        alert("Có lỗi xảy ra trong quá trình xử lý.");
                     }
+                    setProcessing(false);
                 }, 100);
             };
 
-            const handleFileUpload = async (uploadedFiles) => {
-                setProcessing(true);
-                const newFiles = [];
-                for (const file of uploadedFiles) {
-                    const pages = await extractContentFromFile(file, data.settings.useOCR);
-                    newFiles.push({
-                        id: generateId(),
-                        name: file.name,
-                        type: file.name.split('.').pop(),
-                        pages: pages,
-                        selected: true,
-                        pageRange: "" 
-                    });
-                }
-                const updatedLibrary = [...data.library, ...newFiles];
-                updateTab(tabId, { ...data, library: updatedLibrary });
-                runExtraction(updatedLibrary);
-            };
-
-            const toggleFile = (id) => {
-                const updatedLib = data.library.map(f => f.id === id ? { ...f, selected: !f.selected } : f);
-                updateTab(tabId, { ...data, library: updatedLib });
-            };
-            const deleteFile = (id) => {
-                const updatedLib = data.library.filter(f => f.id !== id);
-                updateTab(tabId, { ...data, library: updatedLib });
-                runExtraction(updatedLib);
-            };
-            const handleManualScan = () => runExtraction(data.library);
-
-            // SMART TRANSFORM EFFECT: Updates data in-place instead of re-scanning
-            useEffect(() => {
-                if (data.results.length > 0) {
-                    const updatedResults = data.results.map(r => ({
-                        ...r,
-                        context: transformHtmlContent(r.context, data.settings.textTransform),
-                        // fullContent is usually plain text but might have tags if raw extraction failed? 
-                        // Usually it's safe to transform as plain text, but to be safe we check.
-                        fullContent: applyTextTransform(r.fullContent, data.settings.textTransform)
-                    }));
-                    updateTab(tabId, { ...data, results: updatedResults });
-                }
-                // eslint-disable-next-line react-hooks/exhaustive-deps
-            }, [data.settings.textTransform]);
-
-            const groupedResults = useMemo(() => {
+            const filteredGroups = useMemo(() => {
                 const groups = {};
                 data.results.forEach(r => {
+                    if (searchTerm && !r.context.toLowerCase().includes(searchTerm.toLowerCase()) && !r.fileName.toLowerCase().includes(searchTerm.toLowerCase())) return;
                     if (!groups[r.categoryName]) groups[r.categoryName] = [];
                     groups[r.categoryName].push(r);
                 });
                 return groups;
-            }, [data.results]);
+            }, [data.results, searchTerm]);
 
-            const filteredGroups = useMemo(() => {
-                const searchLower = searchTerm.toLowerCase();
-                const newGroups = {};
-                Object.keys(groupedResults).forEach(key => {
-                    const filtered = groupedResults[key].filter(r => 
-                        r.fileName.toLowerCase().includes(searchLower) || 
-                        r.context.toLowerCase().includes(searchLower) ||
-                        r.keyword.toLowerCase().includes(searchLower)
-                    );
-                    if (filtered.length > 0) newGroups[key] = filtered;
-                });
-                return newGroups;
-            }, [groupedResults, searchTerm]);
-
-            // Function to copy displayed table data (Context Only)
             const handleCopyData = () => {
                 let textToCopy = "";
-                
                 Object.keys(filteredGroups).forEach(catName => {
                     filteredGroups[catName].forEach(row => {
-                        // Remove HTML tags to get plain text
-                        // Replace newlines with spaces to keep it on one line per result, 
-                        // making it easy to paste into a column in Excel.
                         const cleanContext = row.context.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').trim();
-                        if (cleanContext) {
-                            textToCopy += `${cleanContext}\n`;
-                        }
+                        if (cleanContext) textToCopy += `${cleanContext}\n`;
                     });
                 });
-
-                if (!textToCopy) {
-                    alert("Không có dữ liệu để sao chép.");
-                    return;
-                }
-
+                if (!textToCopy) return alert("Không có dữ liệu để sao chép.");
                 copyToClipboard(textToCopy);
                 alert("Đã sao chép cột 'Nội dung' vào Clipboard!");
             };
 
-            if (!isActive) return <div className="hidden"></div>;
-
-            const totalFiles = data.library.length;
-            const selectedFiles = data.library.filter(f => f.selected).length;
-            const activeCategoriesCount = data.categories.filter(c => c.active !== false).length;
-
             return (
-                <div className="h-full flex flex-col p-4 gap-4 overflow-hidden relative">
-                    <ExportModal isOpen={exportModalOpen} onClose={() => setExportModalOpen(false)} categories={data.categories} data={data} onExport={(fmt, cats, setSts) => exportData(data, {format: fmt, selectedCategories: cats}, setSts)} />
-
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[45vh] min-h-[450px] shrink-0">
-                        <div className="lg:col-span-3 h-full">
-                            <CategoryManager categories={data.categories} onChange={(newCats) => updateTab(tabId, { ...data, categories: newCats })} />
+                <div className="flex h-screen w-full flex-col">
+                    {/* Header */}
+                    <div className="h-12 bg-white border-b flex items-center px-4 justify-between shrink-0 shadow-sm z-10">
+                        <div className="flex items-center gap-2 font-bold text-blue-700 text-lg">
+                            <Icon name="database" /> Super Data Extractor <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">v4.17</span>
                         </div>
-
-                        <div className="lg:col-span-5 h-full">
-                            <FileLibrary 
-                                files={data.library} 
-                                onToggle={toggleFile} 
-                                onDelete={deleteFile} 
-                                onDrop={handleFileUpload} 
-                                onUpdatePageRange={handlePageRangeUpdate}
-                            />
+                        <div className="flex items-center gap-2 overflow-x-auto custom-scroll max-w-[50%]">
+                            {tabs.map(t => (
+                                <button key={t.id} onClick={() => setActiveTabId(t.id)} className={`px-3 py-1 rounded text-xs font-medium whitespace-nowrap transition-colors flex items-center gap-1 ${activeTabId === t.id ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                    {t.name}
+                                    {tabs.length > 1 && <span onClick={(e) => { e.stopPropagation(); if(confirm("Xóa dự án này?")) setTabs(tabs.filter(x => x.id !== t.id)); }} className="hover:text-red-300 ml-1">×</span>}
+                                </button>
+                            ))}
+                            <button onClick={addTab} className="p-1 rounded bg-gray-100 hover:bg-gray-200"><Icon name="plus" size={14} /></button>
                         </div>
-
-                        <div className="lg:col-span-4 h-full bg-white rounded-lg shadow-sm border p-4 flex flex-col gap-4 overflow-y-auto custom-scroll">
-                            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shrink-0">
-                                <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2 text-sm">
-                                    <Icon name="settings" size={16} /> Cấu hình Xử lý
-                                </h3>
-                                <div className="space-y-3">
-                                    <label className="flex items-center justify-between cursor-pointer group">
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium text-gray-700">Chế độ OCR (Đọc ảnh)</span>
-                                            <span className="text-[10px] text-gray-400 group-hover:text-blue-500 transition-colors">Tải ngôn ngữ tiếng Việt để đọc ảnh/scan</span>
-                                        </div>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={data.settings.useOCR} 
-                                            onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, useOCR: e.target.checked } })}
-                                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                        />
-                                    </label>
-                                    <div className="h-px bg-gray-200"></div>
-                                    <label className="flex items-center justify-between cursor-pointer">
-                                        <span className="text-sm font-medium text-gray-700">Phân biệt Hoa/Thường</span>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={data.settings.caseSensitive} 
-                                            onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, caseSensitive: e.target.checked } })}
-                                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                        />
-                                    </label>
-                                    <div className="h-px bg-gray-200"></div>
-                                    <div className="flex flex-col gap-2 opacity-70">
-                                        <span className="text-sm font-medium text-gray-700">Định dạng (Cũng có ở bên phải):</span>
-                                        <select 
-                                            className="w-full text-sm border rounded p-1.5 bg-white outline-none focus:ring-1 focus:ring-blue-500"
-                                            value={data.settings.textTransform || 'none'}
-                                            onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, textTransform: e.target.value } })}
-                                        >
-                                            <option value="none">Giữ nguyên</option>
-                                            <option value="uppercase">CHỮ HOA</option>
-                                            <option value="lowercase">chữ thường</option>
-                                            <option value="sentence_case">Chữ hoa đầu dòng</option>
-                                            <option value="no_accent_upper">CHỮ HOA KHÔNG DẤU</option>
-                                            <option value="no_accent_upper_alpha">HOA KHÔNG DẤU (CHỈ LẤY CHỮ)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 shrink-0">
-                                <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2 text-sm">
-                                    <Icon name="activity" size={16} /> Trạng thái
-                                </h3>
-                                <div className="text-sm space-y-2 text-blue-900">
-                                    <div className="flex justify-between">
-                                        <span>File đã chọn:</span>
-                                        <span className="font-bold">{selectedFiles}/{totalFiles}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span>Cấu trúc bật:</span>
-                                        <span className="font-bold text-green-600">{activeCategoriesCount === 0 ? "TOÀN BỘ" : `${activeCategoriesCount} / ${data.categories.length}`}</span>
-                                    </div>
-                                    <div className="flex justify-between border-t border-blue-200 pt-2">
-                                        <span>Kết quả:</span>
-                                        <span className="font-bold">{data.results.length} dòng</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="shrink-0 mt-auto pb-1">
-                                {processing ? (
-                                    <button disabled className="w-full py-3 bg-gray-100 text-gray-400 rounded font-bold flex items-center justify-center gap-2 cursor-wait">
-                                        <Icon name="loader-2" className="animate-spin" /> Đang xử lý...
-                                    </button>
-                                ) : (
-                                    <button onClick={handleManualScan} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95">
-                                        <Icon name="refresh-cw" /> Chạy Trích xuất Ngay
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+                        <div className="text-xs text-gray-400">Chạy cục bộ trên trình duyệt</div>
                     </div>
 
-                    <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm border overflow-hidden min-h-0">
-                        <div className="p-3 border-b flex items-center justify-between gap-4 bg-gray-50 shrink-0">
-                            <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border rounded px-3 py-1.5 shadow-sm focus-within:ring-2 ring-blue-100">
-                                <Icon name="search" size={16} className="text-gray-400" />
-                                <input type="text" placeholder="Tìm kiếm trong kết quả..." className="bg-transparent outline-none text-sm w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                            </div>
+                    {/* Main Content */}
+                    <div className="flex-1 overflow-hidden relative">
+                         <ExportModal isOpen={exportModalOpen} onClose={() => setExportModalOpen(false)} categories={data.categories} data={data} onExport={(fmt, cats, setSts) => exportData(data, {format: fmt, selectedCategories: cats}, setSts)} />
 
-                            <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm" title="Chuyển đổi định dạng kết quả nhanh">
-                                    <Icon name="type" size={16} className="text-blue-600" />
-                                    <select 
-                                        className="text-xs font-medium bg-transparent outline-none text-gray-700 cursor-pointer min-w-[100px]"
-                                        value={data.settings.textTransform || 'none'}
-                                        onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, textTransform: e.target.value } })}
-                                    >
-                                        <option value="none">Giữ nguyên</option>
-                                        <option value="uppercase">CHỮ HOA</option>
-                                        <option value="lowercase">chữ thường</option>
-                                        <option value="sentence_case">Chữ hoa đầu dòng</option>
-                                        <option value="no_accent_upper">HOA KHÔNG DẤU</option>
-                                        <option value="no_accent_upper_alpha">HOA KHÔNG DẤU (CHỈ LẤY CHỮ)</option>
-                                    </select>
+                        <div className="h-full flex flex-col p-4 gap-4 overflow-hidden">
+                            {/* Top Section: Config & Library */}
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-[45vh] min-h-[450px] shrink-0">
+                                {/* Categories (3/12) */}
+                                <div className="lg:col-span-3 h-full overflow-hidden">
+                                    <CategoryManager categories={data.categories} onChange={(newCats) => updateTab(tabId, { ...data, categories: newCats })} />
+                                </div>
+                                
+                                {/* Library (5/12) */}
+                                <div className="lg:col-span-5 h-full overflow-hidden">
+                                    <FileLibrary files={data.library} onToggle={toggleFile} onDelete={deleteFile} onDrop={handleFileUpload} onUpdatePageRange={handlePageRangeUpdate} />
                                 </div>
 
-                                <div className="h-6 w-px bg-gray-300 mx-1"></div>
-
-                                <button onClick={handleCopyData} className="p-2 hover:bg-blue-100 text-blue-600 rounded flex items-center gap-1 text-sm font-medium" title="Copy cột NỘI DUNG vào Clipboard">
-                                    <Icon name="copy" size={16} />
-                                </button>
-
-                                <button onClick={() => updateTab(tabId, {...data, results: []})} className="p-2 hover:bg-red-100 text-red-600 rounded flex items-center gap-1 text-sm font-medium" title="Xóa toàn bộ kết quả">
-                                    <Icon name="trash-2" size={16} />
-                                </button>
-                                <button onClick={() => setExportModalOpen(true)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold shadow-sm transition-colors">
-                                    <Icon name="download" size={16} /> Xuất
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto custom-scroll p-4 space-y-6">
-                            {Object.keys(filteredGroups).length === 0 ? (
-                                <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
-                                    <Icon name="inbox" size={48} />
-                                    <p className="mt-2 text-sm">Chưa có kết quả nào.</p>
-                                </div>
-                            ) : (
-                                Object.entries(filteredGroups).map(([catName, rows]) => (
-                                    <div key={catName} className="border rounded-lg overflow-hidden shadow-sm">
-                                        <div className="bg-blue-50 px-4 py-2 border-b flex justify-between items-center sticky top-0 z-10">
-                                            <h3 className="font-bold text-blue-800 flex items-center gap-2">
-                                                <Icon name="folder" size={16} /> {catName}
-                                                <span className="text-xs font-normal bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">{rows.length}</span>
-                                            </h3>
-                                            <span className="text-[10px] text-gray-400 italic">Lưu ý: Chạy lại trích xuất sẽ ghi đè sửa đổi thủ công.</span>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left text-sm">
-                                                <thead className="bg-gray-50 text-gray-600 font-medium border-b text-xs uppercase">
-                                                    <tr><th className="p-3 w-48">Nguồn File</th><th className="p-3 w-32">Từ khóa</th><th className="p-3">Ngữ cảnh <span className="normal-case font-normal text-gray-400">(Double-click để sửa)</span></th></tr>
-                                                </thead>
-                                                <tbody className="divide-y">
-                                                    {rows.map(row => (
-                                                        <tr key={row.id} className="hover:bg-yellow-50 transition-colors">
-                                                            <td className="p-3 align-top">
-                                                                <div className="font-medium text-gray-800 truncate w-40" title={row.fileName}>{row.fileName}</div>
-                                                                <div className="text-xs text-gray-500 mt-0.5">{typeof row.pageIndex === 'number' ? `Trang ${row.pageIndex}` : row.pageIndex}</div>
-                                                            </td>
-                                                            <td className="p-3 align-top"><span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs border inline-block">{row.keyword}</span></td>
-                                                            <td className="p-3 text-gray-600 text-xs font-mono whitespace-pre-wrap bg-gray-50 rounded m-2 border">
-                                                                <EditableCell 
-                                                                    content={row.context} 
-                                                                    keyword={row.keyword} 
-                                                                    onSave={(newVal) => handleResultEdit(row.id, newVal)} 
-                                                                />
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                {/* Controls (4/12) */}
+                                <div className="lg:col-span-4 h-full bg-white rounded-lg shadow-sm border p-4 flex flex-col gap-4 overflow-y-auto custom-scroll">
+                                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 shrink-0">
+                                        <h3 className="font-bold text-gray-700 mb-3 flex items-center gap-2 text-sm"><Icon name="settings" size={16} /> Cấu hình Xử lý</h3>
+                                        <div className="space-y-3">
+                                            <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium text-gray-700">Chế độ OCR (Ảnh)</span>
+                                                    <span className="text-[10px] text-gray-400">Dùng Tesseract đọc chữ trong ảnh (Chậm)</span>
+                                                </div>
+                                                <input type="checkbox" checked={data.settings.useOCR} onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, useOCR: e.target.checked } })} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                            </label>
+                                            <div className="h-px bg-gray-200"></div>
+                                            <label className="flex items-center justify-between cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium text-gray-700">Phân biệt Hoa/Thường</span>
+                                                    <span className="text-[10px] text-gray-400">Chính xác từng ký tự (Case Sensitive)</span>
+                                                </div>
+                                                <input type="checkbox" checked={data.settings.caseSensitive} onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, caseSensitive: e.target.checked } })} className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                                            </label>
+                                            <div className="h-px bg-gray-200"></div>
+                                            <div className="flex flex-col gap-2 opacity-90">
+                                                <span className="text-sm font-medium text-gray-700 px-2">Định dạng kết quả (Tự động):</span>
+                                                <select className="w-full text-sm border rounded p-2 bg-white outline-none focus:ring-1 focus:ring-blue-500" value={data.settings.textTransform || 'none'} onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, textTransform: e.target.value } })}>
+                                                    <option value="none">Giữ nguyên bản gốc</option>
+                                                    <option value="uppercase">CHỮ HOA TOÀN BỘ</option>
+                                                    <option value="lowercase">chữ thường toàn bộ</option>
+                                                    <option value="sentence_case">Chữ hoa đầu câu</option>
+                                                    <option value="no_accent_upper">CHỮ HOA KHÔNG DẤU</option>
+                                                    <option value="no_accent_upper_alpha">HOA KHÔNG DẤU (CHỈ LẤY CHỮ)</option>
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
-                                ))
-                            )}
+
+                                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 shrink-0 text-xs text-blue-800 space-y-2">
+                                        <h3 className="font-bold flex items-center gap-2"><Icon name="activity" size={14} /> Trạng thái</h3>
+                                        <div className="flex justify-between"><span>File đã chọn:</span><span className="font-bold">{data.library.filter(f => f.selected).length}</span></div>
+                                        <div className="flex justify-between"><span>Kết quả hiện tại:</span><span className="font-bold">{data.results.length}</span></div>
+                                    </div>
+
+                                    <div className="shrink-0 mt-auto pb-1">
+                                        {processing ? (
+                                            <button disabled className="w-full py-3 bg-gray-100 text-gray-400 rounded font-bold flex items-center justify-center gap-2 cursor-wait"><Icon name="loader-2" className="animate-spin" /> Đang xử lý...</button>
+                                        ) : (
+                                            <button onClick={runExtraction} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold shadow-md transform active:scale-95 transition-all flex items-center justify-center gap-2"><Icon name="play" /> BẮT ĐẦU QUÉT</button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Bottom Section: Results */}
+                            <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm border overflow-hidden min-h-0">
+                                <div className="p-3 border-b flex items-center justify-between gap-4 bg-gray-50 shrink-0">
+                                    <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border rounded px-3 py-1.5 shadow-sm focus-within:ring-2 ring-blue-100">
+                                        <Icon name="search" size={16} className="text-gray-400" />
+                                        <input type="text" placeholder="Tìm kiếm trong kết quả..." className="bg-transparent outline-none text-sm w-full" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-1 bg-white border rounded px-2 py-1 shadow-sm" title="Chuyển đổi định dạng kết quả nhanh">
+                                            <Icon name="type" size={16} className="text-blue-600" />
+                                            <select 
+                                                className="text-xs font-medium bg-transparent outline-none text-gray-700 cursor-pointer min-w-[100px]"
+                                                value={data.settings.textTransform || 'none'}
+                                                onChange={(e) => updateTab(tabId, { ...data, settings: { ...data.settings, textTransform: e.target.value } })}
+                                            >
+                                                <option value="none">Giữ nguyên</option>
+                                                <option value="uppercase">CHỮ HOA</option>
+                                                <option value="lowercase">chữ thường</option>
+                                                <option value="sentence_case">Hoa đầu câu</option>
+                                                <option value="no_accent_upper">HOA KHÔNG DẤU</option>
+                                            </select>
+                                        </div>
+
+                                        <button onClick={handleCopyData} className="p-2 hover:bg-blue-100 text-blue-600 rounded flex items-center gap-1 text-sm font-medium" title="Copy cột NỘI DUNG vào Clipboard"><Icon name="copy" size={16} /></button>
+                                        <button onClick={() => updateTab(tabId, {...data, results: []})} className="p-2 hover:bg-red-100 text-red-600 rounded flex items-center gap-1 text-sm font-medium" title="Xóa toàn bộ kết quả"><Icon name="trash-2" size={16} /></button>
+                                        <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                                        <button onClick={() => setExportModalOpen(true)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold shadow-sm transition-colors"><Icon name="download" size={16} /> Xuất Báo Cáo</button>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 overflow-auto bg-gray-50 p-4 custom-scroll">
+                                    {Object.keys(filteredGroups).length === 0 ? (
+                                        <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+                                            <Icon name="inbox" size={48} />
+                                            <p className="mt-2 text-sm">Chưa có kết quả nào.</p>
+                                        </div>
+                                    ) : (
+                                        Object.entries(filteredGroups).map(([catName, rows]) => (
+                                            <div key={catName} className="mb-6 bg-white rounded-lg shadow-sm border overflow-hidden">
+                                                <div className="bg-blue-50 px-4 py-2 border-b flex justify-between items-center">
+                                                    <h3 className="font-bold text-blue-800 flex items-center gap-2">
+                                                        <Icon name="folder" size={16} /> {catName} 
+                                                        <span className="text-xs font-normal bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">{rows.length}</span>
+                                                    </h3>
+                                                    <span className="text-[10px] text-gray-400 italic">Double-click nội dung để sửa.</span>
+                                                </div>
+                                                <div className="overflow-x-auto">
+                                                    <table className="w-full text-left text-sm">
+                                                        <thead className="bg-gray-50 text-gray-600 font-medium border-b text-xs uppercase">
+                                                            <tr><th className="p-3 w-48">Nguồn File</th><th className="p-3 w-32">Từ khóa</th><th className="p-3">Ngữ cảnh</th></tr>
+                                                        </thead>
+                                                        <tbody className="divide-y">
+                                                            {rows.map(row => (
+                                                                <tr key={row.id} className="hover:bg-gray-50 group">
+                                                                    <td className="p-3 align-top">
+                                                                        <div className="font-medium text-gray-800 truncate max-w-[12rem]" title={row.fileName}>{row.fileName}</div>
+                                                                        <div className="text-[10px] text-gray-400">Trang {row.pageIndex}</div>
+                                                                    </td>
+                                                                    <td className="p-3 align-top"><span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs border inline-block">{row.keyword}</span></td>
+                                                                    <td className="p-3 text-gray-600 text-xs font-mono whitespace-pre-wrap bg-gray-50 rounded m-2 border">
+                                                                        <EditableCell content={row.context} keyword={row.keyword} onSave={(newVal) => handleResultEdit(row.id, newVal)} />
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            );
-        };
-
-        const App = () => {
-            const [tabs, setTabs] = useState(() => {
-                const saved = localStorage.getItem('extractor_v4_tabs');
-                const defaultData = [{
-                    id: 'default',
-                    name: 'Dự án mẫu',
-                    categories: [
-                        { id: 'c1', name: 'Cửa', keywords: 'cửa, door', active: true },
-                        { id: 'c2', name: 'Trần', keywords: 'trần, ceiling', active: true }
-                    ],
-                    library: [], 
-                    results: [],
-                    settings: { useOCR: false, caseSensitive: false, textTransform: 'none' }
-                }];
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    parsed.forEach(t => t.categories.forEach(c => { if (c.active === undefined) c.active = true; }));
-                    return parsed;
-                }
-                return defaultData;
-            });
-            
-            // Initialize activeTabId from localStorage
-            const [activeTabId, setActiveTabId] = useState(() => {
-                const savedId = localStorage.getItem('extractor_v4_active_tab');
-                // Ensure the saved ID actually exists in current tabs
-                if (savedId && saved.some(t => t.id === savedId)) {
-                    return savedId;
-                }
-                return tabs[0]?.id || 'default';
-            });
-
-            // Save active tab ID whenever it changes
-            useEffect(() => {
-                localStorage.setItem('extractor_v4_active_tab', activeTabId);
-            }, [activeTabId]);
-
-            // Existing effect to save tabs data
-            useEffect(() => {
-                try {
-                    const tabsToSave = tabs.map(tab => ({
-                        ...tab,
-                        library: tab.library.map(({ pages, ...rest }) => ({ ...rest, pages: [] })),
-                        results: tab.results.map(({ fullContent, ...rest }) => rest)
-                    }));
-                    localStorage.setItem('extractor_v4_tabs', JSON.stringify(tabsToSave));
-                } catch (e) { console.warn("Quota exceeded"); }
-            }, [tabs]);
-
-            const updateTab = (id, newData) => setTabs(tabs.map(t => t.id === id ? { ...newData } : t));
-            
-            const addTab = () => {
-                const currentTab = tabs.find(t => t.id === activeTabId) || tabs[0];
-                const newId = generateId();
-                
-                // Clone categories (deep copy to avoid reference issues)
-                // If currentTab exists, clone its categories. Otherwise use default.
-                const initialCategories = currentTab 
-                    ? currentTab.categories.map(c => ({...c, id: generateId()})) 
-                    : [{id: generateId(), name: 'Mục 1', keywords: '', active: true}];
-                
-                // Clone settings
-                const initialSettings = currentTab 
-                    ? {...currentTab.settings} 
-                    : { useOCR: false, caseSensitive: false, textTransform: 'none' };
-
-                setTabs([...tabs, { 
-                    id: newId, 
-                    name: `Dự án ${tabs.length+1}`, 
-                    categories: initialCategories, 
-                    library: [], 
-                    results: [], 
-                    settings: initialSettings
-                }]);
-                setActiveTabId(newId);
-            };
-            
-            const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
-
-            return (
-                <div className="flex h-screen w-screen overflow-hidden bg-gray-100 font-sans text-gray-900">
-                    <div className="w-16 bg-white border-r flex flex-col items-center py-4 gap-4 z-10 shadow-lg shrink-0">
-                        <div className="bg-blue-600 p-2 rounded-lg text-white mb-2"><Icon name="box" size={24} /></div>
-                        {tabs.map(t => (
-                            <button key={t.id} onClick={() => setActiveTabId(t.id)} className={`p-2 rounded-lg transition-all relative group ${t.id === activeTabId ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:bg-gray-100'}`}>
-                                <Icon name="folder" size={20} />
-                                <span className="absolute left-14 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 whitespace-nowrap z-50 pointer-events-none transition-opacity">{t.name}</span>
-                            </button>
-                        ))}
-                        <button onClick={addTab} className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 mt-auto"><Icon name="plus" size={20} /></button>
-                    </div>
-                    <div className="flex-1 h-full relative min-w-0">
-                        <Workspace key={activeTab.id} tabId={activeTab.id} data={activeTab} updateTab={updateTab} isActive={true} />
                     </div>
                 </div>
             );
