@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Data Extractor Pro v4.17 (Smart Defaults)</title>
+    <title>Super Data Extractor Pro v4.18 (Maximize Support)</title>
 
     <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -47,6 +47,9 @@
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         .animate-spin { animation: spin 1s linear infinite; }
         .cursor-wait { cursor: wait; }
+        
+        /* Maximize Transition */
+        .maximize-transition { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
 <body>
@@ -149,10 +152,6 @@
             document.body.removeChild(textArea);
         };
 
-        const getLineContext = (fullText, index) => {
-            return "Deprecated in favor of new logic"; 
-        };
-
         // --- FILE PROCESSING ---
         const extractContentFromFile = async (file, useOCR) => {
             const fileType = file.name.split('.').pop().toLowerCase();
@@ -188,18 +187,18 @@
                         }
                     }
                 } else {
-                     // Fallback for binary/unsupported
-                     pages.push({ pageIndex: 0, text: `[Định dạng .${fileType} chưa hỗ trợ trích xuất nội dung]` });
-                     try {
-                        // Attempt text read anyway for some formats
-                         const text = await file.text();
-                         // Simple check if it looks like binary
-                         if (/[\x00-\x08\x0E-\x1F]/.test(text.substring(0, 100))) {
-                             // Binary detected
-                         } else {
-                            pages.push({ pageIndex: 1, text: text.substring(0, 2000) + "\n...[File có thể chưa được đọc trọn vẹn]..." });
-                         }
-                     } catch(e) {}
+                      // Fallback for binary/unsupported
+                      pages.push({ pageIndex: 0, text: `[Định dạng .${fileType} chưa hỗ trợ trích xuất nội dung]` });
+                      try {
+                         // Attempt text read anyway for some formats
+                           const text = await file.text();
+                           // Simple check if it looks like binary
+                           if (/[\x00-\x08\x0E-\x1F]/.test(text.substring(0, 100))) {
+                               // Binary detected
+                           } else {
+                             pages.push({ pageIndex: 1, text: text.substring(0, 2000) + "\n...[File có thể chưa được đọc trọn vẹn]..." });
+                           }
+                      } catch(e) {}
                 }
                 return pages;
             } catch (error) {
@@ -243,13 +242,9 @@
             else if (format === 'pdf') {
                 if (setExportStatus) setExportStatus("Đang tạo PDF...");
                 
-                // Simple PDF using jsPDF AutoTable
-                // Note: Standard fonts might not support Vietnamese well without custom font loading
-                // Here we use a safe default approach
                 const { jsPDF } = window.jspdf;
                 const doc = new jsPDF();
                 
-                // Add title
                 doc.setFontSize(16);
                 doc.text("Bao cao trich xuat du lieu", 14, 15);
                 
@@ -257,7 +252,7 @@
                     r.categoryName,
                     `${r.fileName} (Trg ${r.pageIndex})`,
                     r.keyword,
-                    r.context.replace(/<[^>]*>?/gm, ' ').substring(0, 100) // Truncate for PDF stability
+                    r.context.replace(/<[^>]*>?/gm, ' ').substring(0, 100)
                 ]);
 
                 doc.autoTable({
@@ -328,8 +323,8 @@
             };
 
             return (
-                <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-                    <div className="bg-white rounded-lg p-6 w-96 shadow-xl relative" style={{zIndex: 1000}}>
+                <div className="fixed inset-0 bg-black bg-opacity-50 z-[2000] flex items-center justify-center">
+                    <div className="bg-white rounded-lg p-6 w-96 shadow-xl relative" style={{zIndex: 2001}}>
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Icon name="download" /> Xuất dữ liệu</h3>
                         
                         {status && (
@@ -543,6 +538,7 @@
             const [processing, setProcessing] = useState(false);
             const [searchTerm, setSearchTerm] = useState("");
             const [exportModalOpen, setExportModalOpen] = useState(false);
+            const [isResultMaximized, setIsResultMaximized] = useState(false); // NEW STATE FOR MAXIMIZE
 
             useEffect(() => { localStorage.setItem('extractor_v4_data', JSON.stringify(tabs)); }, [tabs]);
             useEffect(() => { localStorage.setItem('extractor_v4_active_tab', activeTabId); }, [activeTabId]);
@@ -636,9 +632,9 @@
                 const activeFiles = data.library.filter(f => f.selected);
 
                 if (activeFiles.length === 0) {
-                     alert("Vui lòng chọn ít nhất một file để xử lý.");
-                     setProcessing(false);
-                     return;
+                      alert("Vui lòng chọn ít nhất một file để xử lý.");
+                      setProcessing(false);
+                      return;
                 }
 
                 setTimeout(() => {
@@ -753,7 +749,7 @@
                     {/* Header */}
                     <div className="h-12 bg-white border-b flex items-center px-4 justify-between shrink-0 shadow-sm z-10">
                         <div className="flex items-center gap-2 font-bold text-blue-700 text-lg">
-                            <Icon name="database" /> Super Data Extractor <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">v4.17</span>
+                            <Icon name="database" /> Super Data Extractor <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">v4.18</span>
                         </div>
                         <div className="flex items-center gap-2 overflow-x-auto custom-scroll max-w-[50%]">
                             {tabs.map(t => (
@@ -835,8 +831,8 @@
                                 </div>
                             </div>
 
-                            {/* Bottom Section: Results */}
-                            <div className="flex-1 flex flex-col bg-white rounded-lg shadow-sm border overflow-hidden min-h-0">
+                            {/* Bottom Section: Results with MAXIMIZE Logic */}
+                            <div className={`flex flex-col bg-white shadow-sm border overflow-hidden maximize-transition ${isResultMaximized ? 'fixed inset-0 z-50 rounded-none h-screen w-screen' : 'flex-1 rounded-lg min-h-0'}`}>
                                 <div className="p-3 border-b flex items-center justify-between gap-4 bg-gray-50 shrink-0">
                                     <div className="flex items-center gap-2 flex-1 max-w-sm bg-white border rounded px-3 py-1.5 shadow-sm focus-within:ring-2 ring-blue-100">
                                         <Icon name="search" size={16} className="text-gray-400" />
@@ -861,6 +857,16 @@
 
                                         <button onClick={handleCopyData} className="p-2 hover:bg-blue-100 text-blue-600 rounded flex items-center gap-1 text-sm font-medium" title="Copy cột NỘI DUNG vào Clipboard"><Icon name="copy" size={16} /></button>
                                         <button onClick={() => updateTab(tabId, {...data, results: []})} className="p-2 hover:bg-red-100 text-red-600 rounded flex items-center gap-1 text-sm font-medium" title="Xóa toàn bộ kết quả"><Icon name="trash-2" size={16} /></button>
+                                        
+                                        {/* MAXIMIZE BUTTON ADDED HERE */}
+                                        <button 
+                                            onClick={() => setIsResultMaximized(!isResultMaximized)} 
+                                            className="p-2 hover:bg-gray-100 text-gray-600 rounded flex items-center gap-1 text-sm font-medium" 
+                                            title={isResultMaximized ? "Thu nhỏ" : "Phóng to"}
+                                        >
+                                            <Icon name={isResultMaximized ? "minimize-2" : "maximize-2"} size={16} />
+                                        </button>
+
                                         <div className="h-6 w-px bg-gray-300 mx-1"></div>
                                         <button onClick={() => setExportModalOpen(true)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-bold shadow-sm transition-colors"><Icon name="download" size={16} /> Xuất Báo Cáo</button>
                                     </div>
